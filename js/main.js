@@ -74,7 +74,7 @@ function refreshUI() {
     checkSmartSchedule();
     
     if(!document.getElementById('admin-panel-homework').classList.contains('hidden')) renderIncomingSubmissions();
-    if(!document.getElementById('admin-panel-material').classList.contains('hidden')) renderAdminMaterials();
+    if(!document.getElementById('admin-panel-material').classList.contains('hidden')) renderAdminMaterials(dataState.materials || [], dataState.subjects);
     updateInboxBadge();
 }
 
@@ -115,7 +115,10 @@ function updateLocalState(p) {
             else dataState.submissions.push({taskId:p.taskId, studentId:sid, link:p.link, timestampISO: new Date().toISOString(), comment: p.comment});
         });
     }
-    // ... (Add other state updates here as needed)
+    if(p.action === 'addMaterial') { // Added material handler
+        dataState.materials = dataState.materials || [];
+        dataState.materials.push({id:p.id, subjectId:p.subjectId, title:p.title, link:p.link});
+    }
 }
 
 function initEventListeners() {
@@ -153,6 +156,37 @@ function initEventListeners() {
         showToast("สร้างงานแล้ว");
     };
 
+    document.getElementById('form-schedule').onsubmit = (e) => {
+        e.preventDefault();
+        const day = document.getElementById('sch-day').value;
+        const period = document.getElementById('sch-period').value;
+        const classId = document.getElementById('sch-class').value;
+        if(!classId) return showToast("เลือกห้องเรียน", "warning");
+
+        // Optimistic update for schedule
+        if(!dataState.schedules) dataState.schedules = [];
+        // Remove old entry if same day/period
+        dataState.schedules = dataState.schedules.filter(s => !(s.day == day && s.period == period));
+        dataState.schedules.push({ day, period, classId });
+        
+        handleSave({ action:'updateSchedule', schedule: dataState.schedules }); // Assume API handles full update or specific logic
+        renderScheduleList(dataState.schedules, dataState.classes);
+        showToast("บันทึกตารางสอนแล้ว");
+    };
+
+    document.getElementById('form-material').onsubmit = (e) => {
+        e.preventDefault();
+        handleSave({
+            action: 'addMaterial',
+            id: Date.now(),
+            subjectId: document.getElementById('mat-subject').value,
+            title: document.getElementById('mat-title').value,
+            link: document.getElementById('mat-link').value
+        });
+        e.target.reset();
+        showToast("เพิ่มเนื้อหาแล้ว");
+    };
+
     // Scanners
     document.getElementById('scan-score-input').onkeydown = (e) => {
         if(e.key === 'Enter') {
@@ -178,6 +212,22 @@ function initEventListeners() {
             } else { showToast("ไม่พบนักเรียน", "error"); e.target.value=''; }
         }
     };
+
+    document.getElementById('att-scan-input').onkeydown = (e) => {
+        if(e.key === 'Enter') {
+            const val = e.target.value.trim();
+            const cid = document.getElementById('att-class-select').value;
+            const date = document.getElementById('att-date-input').value;
+            if(!cid || !attMode) return showToast("เลือกห้อง/สถานะก่อน", "warning");
+            
+            const s = dataState.students.find(st => (st.code == val || st.no == val) && st.classId == cid);
+            if(s) {
+                handleSave({action:'addAttendance', studentId:s.id, classId:cid, date:date, status:attMode});
+                showToast(`${s.name} : ${attMode}`, "success");
+                e.target.value = '';
+            } else { showToast("ไม่พบนักเรียน", "error"); e.target.value=''; }
+        }
+    }
     
     // Select Change
     document.getElementById('scan-class-select').onchange = () => { updateScanTaskDropdown(); renderScoreRoster(); };
@@ -194,6 +244,24 @@ function initEventListeners() {
         document.getElementById('score-modal').classList.add('hidden');
     };
     document.getElementById('modal-score-input').onkeydown = (e) => { if(e.key==='Enter') document.getElementById('btn-modal-save').click(); };
+
+    // Student Submit Modal
+    document.getElementById('form-submit-work').onsubmit = (e) => {
+        e.preventDefault();
+        const tid = document.getElementById('submit-task-id').value;
+        const mainSid = document.getElementById('submit-student-id').value;
+        const link = document.getElementById('submit-link-input').value;
+        const comment = document.getElementById('submit-comment-input').value;
+        
+        // Collect friends
+        const friendCbs = document.querySelectorAll('.friend-checkbox:checked');
+        const sids = [mainSid, ...Array.from(friendCbs).map(cb => cb.value)];
+        
+        handleSave({ action: 'submitTask', taskId: tid, studentIds: sids, link, comment });
+        document.getElementById('submit-modal').classList.add('hidden');
+        showToast("ส่งงานเรียบร้อย");
+        e.target.reset();
+    }
 }
 
 // --- UI Logic that needs State access ---
@@ -389,7 +457,112 @@ function renderStudentTasks(s, tasks) {
 window.openSubmitModal = (tid, sid) => {
     document.getElementById('submit-task-id').value = tid;
     document.getElementById('submit-student-id').value = sid;
+    
+    // Render friend selector (same class only)
+    const me = dataState.students.find(s => s.id == sid);
+    const friends = dataState.students.filter(s => s.classId == me.classId && s.id != me.id).sort((a,b) => Number(a.no)-Number(b.no));
+    const div = document.getElementById('friend-selector-container');
+    div.innerHTML = friends.map(f => `<label class="flex items-center gap-2 text-xs text-white/70 hover:bg-white/5 p-1 rounded cursor-pointer"><input type="checkbox" value="${f.id}" class="friend-checkbox accent-yellow-500"> No.${f.no} ${f.name}</label>`).join('');
+    
+    const taskName = dataState.tasks.find(t=>t.id==tid)?.name;
+    document.getElementById('submit-modal-title').textContent = taskName;
     document.getElementById('submit-modal').classList.remove('hidden');
 };
 
 window.logoutStudent = () => { location.reload(); };
+
+// --- NEW FUNCTIONS FIX (Added missing exports) ---
+
+window.printOfficialReport = () => {
+    const cid = document.getElementById('report-class').value;
+    if(!cid) return showToast("กรุณาเลือกห้องเรียนก่อนพิมพ์", "warning");
+    
+    const cls = dataState.classes.find(c => c.id == cid);
+    const tasks = dataState.tasks.filter(t => t.classId == cid);
+    const tbody = document.getElementById('print-table-body');
+    tbody.innerHTML = '';
+    
+    dataState.students.filter(s => s.classId == cid).sort((a,b)=>Number(a.no)-Number(b.no)).forEach((s, idx) => {
+        const { chapScores, midterm, final, total } = calculateScores(s.id, tasks, dataState.scores);
+        const grade = calGrade(total);
+        tbody.innerHTML += `<tr>
+            <td>${s.no||idx+1}</td>
+            <td>${s.code}</td>
+            <td style="text-align:left;">${s.name}</td>
+            ${chapScores.map(c=>`<td>${c}</td>`).join('')}
+            <td>${midterm}</td>
+            <td>${final}</td>
+            <td>${total}</td>
+            <td>${grade}</td>
+        </tr>`;
+    });
+    
+    document.getElementById('print-subtitle').textContent = `ระดับชั้น ${cls.name}`;
+    window.print();
+};
+
+window.exportGradeCSV = () => {
+    const cid = document.getElementById('report-class').value;
+    if(!cid) return showToast("กรุณาเลือกห้องเรียนก่อน", "warning");
+
+    const cls = dataState.classes.find(c => c.id == cid);
+    const tasks = dataState.tasks.filter(t => t.classId == cid);
+    let csvContent = "\uFEFFลำดับ,รหัส,ชื่อ-นามสกุล,บทที่ 1,บทที่ 2,บทที่ 3,บทที่ 4,บทที่ 5,บทที่ 6,กลางภาค,ปลายภาค,รวม,เกรด\n";
+
+    dataState.students.filter(s => s.classId == cid).sort((a,b)=>Number(a.no)-Number(b.no)).forEach((s, idx) => {
+        const { chapScores, midterm, final, total } = calculateScores(s.id, tasks, dataState.scores);
+        const grade = calGrade(total);
+        const row = [
+            s.no || idx + 1,
+            s.code,
+            `"${s.name}"`, // Quote name in case of commas
+            ...chapScores,
+            midterm,
+            final,
+            total,
+            grade
+        ];
+        csvContent += row.join(",") + "\n";
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Grade_Report_${cls.name}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+
+window.exportAttendanceCSV = () => {
+    const cid = document.getElementById('att-class-select').value;
+    const date = document.getElementById('att-date-input').value;
+    if(!cid) return showToast("กรุณาเลือกห้องเรียน", "warning");
+
+    const cls = dataState.classes.find(c => c.id == cid);
+    let csvContent = `\uFEFFวันที่ ${date},ห้อง ${cls.name}\nลำดับ,รหัส,ชื่อ-นามสกุล,สถานะ\n`;
+
+    dataState.students.filter(s => s.classId == cid).sort((a,b)=>Number(a.no)-Number(b.no)).forEach((s, idx) => {
+        const log = dataState.attendance.find(x => x.studentId == s.id && x.date.startsWith(date));
+        const status = log ? log.status : 'ขาด'; // Default to absent if no record? or 'ยังไม่เช็ค'
+        const row = [
+            s.no || idx+1,
+            s.code,
+            `"${s.name}"`,
+            status
+        ];
+        csvContent += row.join(",") + "\n";
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Attendance_${cls.name}_${date}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
