@@ -1,6 +1,6 @@
 import { getThaiDateISO, formatThaiDate, calGrade, calculateScores, escapeHtml } from './utils.js';
 import { fetchData, sendData } from './api.js';
-import { showToast, showLoading, renderDropdown, renderScheduleList } from './ui.js';
+import { showToast, showLoading, renderDropdown, renderScheduleList, renderAdminMaterials } from './ui.js';
 
 let dataState = { subjects: [], classes: [], students: [], tasks: [], scores: [], attendance: [], materials: [], submissions: [], returns: [], schedules: [] };
 let scoreMode = 'manual';
