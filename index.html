@@ -347,7 +347,7 @@
             <p class="text-white/60 text-sm mb-6 text-center">กรุณาระบุอีเมลเพื่อรับการแจ้งเตือนงานและการบ้านสำคัญจากระบบ (บังคับ)</p>
             <input type="hidden" id="email-modal-role">
             <input type="email" id="user-email-input" class="w-full glass-input rounded-xl px-4 py-3 text-white text-center mb-4" placeholder="yourname@email.com">
-            <button onclick="saveUserEmail()" class="w-full btn-blue py-3 rounded-xl font-bold shadow-lg">บันทึกอีเมล</button>
+            <button type="button" onclick="saveUserEmail()" class="w-full btn-blue py-3 rounded-xl font-bold shadow-lg">บันทึกอีเมล</button>
             <button id="btn-close-email" onclick="document.getElementById('email-modal').classList.add('hidden')" class="w-full mt-2 py-2 text-xs text-white/30 hover:text-white hidden">ปิดหน้าต่าง</button>
         </div>
     </div>
@@ -370,7 +370,12 @@
     let pendingScore = null;
     let smartClassId = null; 
     let currentConfig = [];
-    let tempConfig = []; // เพิ่มตัวแปรสำหรับตั้งค่าคะแนน
+    let tempConfig = []; 
+    
+    // --- เพิ่มตัวแปรสำหรับระบบคิว ---
+    let requestQueue = [];
+    let isProcessingQueue = false;
+    // ----------------------------
 
     const PERIODS = [
         { p: 1, start: "08:30", end: "09:20" }, { p: 2, start: "09:20", end: "10:10" }, { p: 3, start: "10:10", end: "11:00" },
@@ -379,6 +384,12 @@
     ];
 
     async function syncData() {
+        // ถ้าคิวค้างอยู่ ไม่ต้องดึงข้อมูลใหม่มาทับ ให้เคลียร์คิวก่อน
+        if (requestQueue.length > 0) {
+            processQueue();
+            return;
+        }
+
         const statusIcon = document.querySelector('.fa-wifi');
         if(statusIcon) {
             statusIcon.className = "fa-solid fa-spinner fa-spin text-yellow-400"; 
@@ -401,15 +412,12 @@
             const response = await fetch(GOOGLE_SCRIPT_URL + "?action=getData&t=" + Date.now());
             const result = await response.json();
             if (result.status === 'success' || result.subjects) {
+                // ผสานข้อมูล Local กับ Server (อย่างง่าย) เพื่อไม่ให้ข้อมูลที่เพิ่งทำหายไป
                 dataState = result.data || result;
                 saveToLocalStorage();
                 refreshUI();
                 
-                if(statusIcon) {
-                    statusIcon.className = "fa-solid fa-wifi";
-                    if(statusIcon.nextSibling) statusIcon.nextSibling.textContent = " Online";
-                    statusIcon.parentElement.className = "text-xs text-green-400 font-bold transition-all";
-                }
+                updateSyncUI('Online', 'green');
             }
         } catch (error) {
             console.warn("Sync Failed (Offline/Error):", error);
@@ -417,11 +425,16 @@
             if(dataState.subjects.length === 0) loadMockData();
             refreshUI();
             
-            if(statusIcon) {
-                statusIcon.className = "fa-solid fa-wifi";
-                if(statusIcon.nextSibling) statusIcon.nextSibling.textContent = " Offline";
-                statusIcon.parentElement.className = "text-xs text-red-400 font-bold animate-pulse";
-            }
+            updateSyncUI('Offline', 'red');
+        }
+    }
+
+    function updateSyncUI(text, color) {
+        const statusIcon = document.querySelector('.fa-wifi');
+        if(statusIcon) {
+            statusIcon.className = color === 'green' ? "fa-solid fa-wifi" : "fa-solid fa-wifi text-red-400 animate-pulse";
+            if(statusIcon.nextSibling) statusIcon.nextSibling.textContent = " " + text;
+            statusIcon.parentElement.className = `text-xs text-${color}-400 font-bold transition-all`;
         }
     }
 
@@ -766,7 +779,13 @@
     function getThaiDateISO() { const d=new Date(); const u=d.getTime()+(d.getTimezoneOffset()*60000); const b=new Date(u+(7*3600000)); return b.toISOString().slice(0,10); }
     function formatThaiDate(dateString) { if (!dateString) return "-"; const date = new Date(dateString); if (isNaN(date.getTime())) return "-"; return new Intl.DateTimeFormat('th-TH', { day: 'numeric', month: 'short', year: '2-digit' }).format(date); }
     function calGrade(s) { if(s>=80)return 4; if(s>=75)return 3.5; if(s>=70)return 3; if(s>=65)return 2.5; if(s>=60)return 2; if(s>=55)return 1.5; if(s>=50)return 1; return 0; }
-    function showToast(m,c){ const t=document.getElementById('toast-notification'); document.getElementById('toast-message').textContent=m; t.className=`fixed bottom-10 left-1/2 -translate-x-1/2 bg-gradient-to-r from-green-600 to-teal-600 text-white px-8 py-4 rounded-full shadow-2xl z-50 flex items-center gap-3 translate-y-20 opacity-0 font-bold border border-green-400/50 toast-show`; setTimeout(()=>t.classList.remove('toast-show'),3000); }
+    function showToast(m,c){ 
+        const t=document.getElementById('toast-notification'); 
+        document.getElementById('toast-message').textContent=m; 
+        const theme = c || "bg-gradient-to-r from-green-600 to-teal-600 border-green-400/50";
+        t.className=`fixed bottom-10 left-1/2 -translate-x-1/2 text-white px-8 py-4 rounded-full shadow-2xl z-50 flex items-center gap-3 translate-y-20 opacity-0 font-bold border ${theme} toast-show`; 
+        setTimeout(()=>t.classList.remove('toast-show'),3000); 
+    }
     function updateInboxBadge() { let count = 0; dataState.submissions.forEach(sub => { if(!dataState.scores.some(sc => sc.taskId == sub.taskId && sc.studentId == sub.studentId)) count++; }); const badge = document.getElementById('badge-homework'); count > 0 ? (badge.classList.remove('hidden'), badge.textContent = count > 99 ? '99+' : count) : badge.classList.add('hidden'); }
     
     function switchMainTab(t) { document.getElementById('section-admin').classList.add('hidden'); document.getElementById('section-student').classList.add('hidden'); document.getElementById(`section-${t}`).classList.remove('hidden'); const btnA = document.getElementById('tab-btn-admin'), btnS = document.getElementById('tab-btn-student'); if(t=='admin'){ btnA.className="px-6 py-2 rounded-full text-sm font-bold bg-white text-blue-900 shadow-lg transition-all"; btnS.className="px-6 py-2 rounded-full text-sm font-bold text-white/50 hover:text-white transition-all"; } else { btnS.className="px-6 py-2 rounded-full text-sm font-bold bg-white text-blue-900 shadow-lg transition-all"; btnA.className="px-6 py-2 rounded-full text-sm font-bold text-white/50 hover:text-white transition-all"; } }
@@ -820,18 +839,62 @@
 
     function renderAdminMaterials() { const div = document.getElementById('admin-mat-list'); div.innerHTML = ''; dataState.materials.forEach(m => { const sub = dataState.subjects.find(s=>s.id == m.subjectId)?.name || '-'; const el = document.createElement('div'); el.className = "bg-white/5 p-3 rounded-xl border border-white/10 flex justify-between"; el.innerHTML = `<div><div class="text-xs text-yellow-400">${sub}</div><div class="font-bold text-sm text-white"><a href="${m.link}" target="_blank" class="hover:underline">${m.title}</a></div></div>`; div.appendChild(el); }); }
 
+    // --- ระบบคิวแบบใหม่ ---
     async function saveAndRefresh(payload) { 
+        // 1. ถ้าเป็นการ Login ให้ส่งทันที (ไม่เข้าคิว)
+        if(payload.action === 'login') {
+            try {
+                const res = await fetch(GOOGLE_SCRIPT_URL, { method:'POST', body:JSON.stringify(payload) }); 
+                return await res.json(); 
+            } catch(e) { return {status:'error'}; }
+        }
+
+        // 2. ถ้าเป็นการบันทึกข้อมูลทั่วไป: ทำ Optimistic Update ทันที
         updateLocalState(payload); 
         refreshUI(); 
-        try { 
-            const res = await fetch(GOOGLE_SCRIPT_URL, { method:'POST', body:JSON.stringify(payload) }); 
-            if(payload.action==='login') return await res.json(); 
-            return {status:'success'};
-        } catch(e) { 
-            showToast("บันทึกไม่สำเร็จ (ตรวจสอบเน็ต)", "bg-red-600"); 
-            return {status:'error'};
-        } 
+        saveToLocalStorage(); // บันทึกลง LocalStorage ทันที กันเน็ตหลุด/ปิดจอ
+
+        // แสดงผลหน้าเว็บทันทีว่าบันทึกแล้ว (ระดับ Local)
+        showToast("บันทึกแล้ว (กำลังซิงค์...)", "bg-gradient-to-r from-blue-600 to-indigo-600 border-blue-400/50");
+
+        // 3. นำคำขอเข้าคิว
+        requestQueue.push(payload);
+        processQueue(); // เริ่มประมวลผลคิว
+
+        return {status:'success'};
     }
+
+    async function processQueue() {
+        if (isProcessingQueue || requestQueue.length === 0) return;
+        isProcessingQueue = true;
+
+        // หน่วงเวลาเล็กน้อยเพื่อให้ระบบไหลลื่น (Smooth delay)
+        await new Promise(r => setTimeout(r, 1000)); 
+
+        updateSyncUI(`Sending (${requestQueue.length})...`, 'yellow');
+
+        while (requestQueue.length > 0) {
+            const payload = requestQueue[0]; // ดูรายการแรก
+            
+            try {
+                const res = await fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: JSON.stringify(payload) });
+                // ถ้าส่งสำเร็จ ให้ลบออกจากคิว
+                requestQueue.shift(); 
+            } catch (e) {
+                console.warn("Sync failed, retrying later...", e);
+                updateSyncUI('Pending Sync (Offline)', 'red');
+                // หยุดการวนลูป เพื่อรอรอบใหม่ (ข้อมูลยังอยู่ในคิว)
+                break; 
+            }
+        }
+        
+        if (requestQueue.length === 0) {
+            updateSyncUI('All Synced', 'green');
+        }
+        
+        isProcessingQueue = false;
+    }
+    // -----------------------
 
     function updateLocalState(p) {
         if(p.action === 'addSubject') dataState.subjects.push({id:p.id, name:p.name});
@@ -935,6 +998,9 @@
         refreshUI();
         syncData(); 
 
+        // ตรวจสอบคิวที่ค้างทุก 5 วินาที (Auto Retry)
+        setInterval(processQueue, 5000);
+
         const adminSession = localStorage.getItem('wany_admin_session');
         const studentCode = localStorage.getItem('current_student_code');
 
@@ -1023,7 +1089,11 @@
         else {
             const code = localStorage.getItem('current_student_code');
             const s = dataState.students.find(x => x.code == code);
-            if (s) { s.email = email; await saveAndRefresh({ action: 'updateEmail', studentId: s.id, email: email }); }
+            if (s) { 
+                s.email = email; 
+                saveToLocalStorage(); // บันทึกทันทีก่อนส่งไป Cloud
+                await saveAndRefresh({ action: 'updateEmail', studentId: s.id, email: email }); 
+            }
         }
         document.getElementById('email-modal').classList.add('hidden');
         showToast("บันทึกอีเมลเรียบร้อย");
@@ -1049,12 +1119,14 @@
     window.submitGroupGrade = async function(studentIdsStr, taskId, max, inputId) { 
         const val = document.getElementById(inputId).value; if(val === '') return alert("กรุณาใส่คะแนน"); if(Number(val) > Number(max)) return alert("คะแนนเกินค่าเต็ม"); 
         const sids = studentIdsStr.split(','); for (const sid of sids) updateLocalState({ action:'addScore', studentId: sid, taskId: taskId, score: val }); refreshUI();
-        const promises = sids.map(sid => fetch(GOOGLE_SCRIPT_URL, { method:'POST', body:JSON.stringify({ action:'addScore', studentId: sid, taskId: taskId, score: val }) })); try { await Promise.all(promises); showToast(`บันทึกคะแนนกลุ่มเรียบร้อย (${sids.length} คน)`, "bg-green-600"); } catch(e) { showToast("บันทึกบางคนไม่สำเร็จ", "bg-red-600"); }
+        const promises = sids.map(sid => saveAndRefresh({ action:'addScore', studentId: sid, taskId: taskId, score: val })); 
+        showToast(`บันทึกคะแนนกลุ่มเรียบร้อย`, "bg-green-600");
     };
     window.returnGroupWork = async function(studentIdsStr, taskId) { 
         const reason = prompt("ระบุเหตุผลที่ส่งคืน (สมาชิกทุกคนจะเห็นข้อความนี้):"); if(reason) { 
             const sids = studentIdsStr.split(','); for (const sid of sids) updateLocalState({ action:'returnForRevision', studentId: sid, taskId: taskId, comment: reason }); refreshUI();
-            const promises = sids.map(sid => fetch(GOOGLE_SCRIPT_URL, { method:'POST', body:JSON.stringify({ action:'returnForRevision', studentId: sid, taskId: taskId, comment: reason }) })); try { await Promise.all(promises); showToast("ส่งคืนงานเรียบร้อย", "bg-yellow-600"); } catch(e) {}
+            const promises = sids.map(sid => saveAndRefresh({ action:'returnForRevision', studentId: sid, taskId: taskId, comment: reason })); 
+            showToast("ส่งคืนงานเรียบร้อย", "bg-yellow-600");
         } 
     };
 
@@ -1248,6 +1320,12 @@
             const term = e.target.value.toLowerCase();
             document.querySelectorAll('.friend-item').forEach(item => { item.style.display = item.textContent.toLowerCase().includes(term) ? 'flex' : 'none'; });
         });
+        document.getElementById('user-email-input').onkeydown = (e) => { 
+            if(e.key === 'Enter') {
+                e.preventDefault(); // Prevent implicit form submit
+                saveUserEmail();
+            }
+        };
         document.getElementById('form-submit-work').onsubmit = async (e) => {
             e.preventDefault();
             const btn = document.getElementById('btn-submit-final');
@@ -1263,7 +1341,7 @@
             try {
                 await saveAndRefresh({ action: 'submitTask', taskId: tid, studentIds: allStudentIds, link: link, comment: comment });
                 document.getElementById('submit-modal').classList.add('hidden');
-                showToast("ส่งงานเรียบร้อย");
+                // showToast("ส่งงานเรียบร้อย"); // Already handled in saveAndRefresh
                 const s = dataState.students.find(x => x.id == sid);
                 if(s) renderStudentDashboard(s);
             } catch(err) { alert("เกิดข้อผิดพลาด"); } 
