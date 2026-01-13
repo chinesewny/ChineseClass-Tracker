@@ -61,7 +61,7 @@
       @media print {
         @page { size: A4 portrait; margin: 1cm; }
         body { background: white !important; color: black !important; -webkit-print-color-adjust: exact; }
-        #app-root, #toast-notification, .no-print { display: none !important; }
+        #app-root, #toast-notification, #loading-overlay, .no-print { display: none !important; }
         #print-area { display: block !important; position: relative !important; width: 100% !important; background: white !important; color: black !important; }
         table { width: 100%; border-collapse: collapse; font-size: 12px; }
         thead { display: table-header-group; } 
@@ -352,6 +352,11 @@
         </div>
     </div>
     
+    <div id="loading-overlay" class="fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm hidden flex flex-col items-center justify-center">
+        <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-yellow-400 mb-4"></div>
+        <p id="loading-text" class="text-white font-bold text-lg animate-pulse">กำลังประมวลผล...</p>
+    </div>
+
     <div id="toast-notification" class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-gradient-to-r from-green-600 to-teal-600 text-white px-8 py-4 rounded-full shadow-2xl z-50 flex items-center gap-3 translate-y-20 opacity-0 font-bold border border-green-400/50"><i class="fa-solid fa-circle-check text-2xl"></i><span id="toast-message" class="text-lg">บันทึกสำเร็จ</span></div>
    </div>
   </div>
@@ -1081,22 +1086,61 @@
         if (!currentEmail) { closeBtn.classList.add('hidden'); } else { closeBtn.classList.remove('hidden'); }
     }
 
+    function showLoading(text="กำลังประมวลผล...") {
+        const overlay = document.getElementById('loading-overlay');
+        document.getElementById('loading-text').textContent = text;
+        overlay.classList.remove('hidden');
+    }
+
+    function hideLoading() {
+        document.getElementById('loading-overlay').classList.add('hidden');
+    }
+
     async function saveUserEmail() {
-        const email = document.getElementById('user-email-input').value;
+        const emailInput = document.getElementById('user-email-input');
+        const email = emailInput.value.trim();
         const role = document.getElementById('email-modal-role').value;
+        
         if(!email.includes('@')) return alert("รูปแบบอีเมลไม่ถูกต้อง");
-        if (role === 'admin') { localStorage.setItem('admin_email', email); } 
-        else {
-            const code = localStorage.getItem('current_student_code');
-            const s = dataState.students.find(x => x.code == code);
-            if (s) { 
-                s.email = email; 
-                saveToLocalStorage(); // บันทึกทันทีก่อนส่งไป Cloud
-                await saveAndRefresh({ action: 'updateEmail', studentId: s.id, email: email }); 
+
+        // 1. Show Loading
+        showLoading("กำลังบันทึกอีเมล...");
+
+        try {
+            // 2. Direct Fetch to Google Sheet (Bypass Queue for critical path)
+            let payload = { action: 'updateEmail', email: email };
+            
+            if (role === 'admin') {
+                localStorage.setItem('admin_email', email);
+                // Admin email usually local, but let's fake a delay or send if backend supports
+                await new Promise(r => setTimeout(r, 800)); 
+            } else {
+                const code = localStorage.getItem('current_student_code');
+                const s = dataState.students.find(x => x.code == code);
+                if (s) {
+                    payload.studentId = s.id;
+                    s.email = email; // Optimistic local update
+                    saveToLocalStorage();
+                    
+                    // Critical: Await the server response
+                    await fetch(GOOGLE_SCRIPT_URL, {
+                        method: 'POST',
+                        body: JSON.stringify(payload)
+                    });
+                } else {
+                    throw new Error("Student not found");
+                }
             }
+
+            // 3. Success
+            document.getElementById('email-modal').classList.add('hidden');
+            showToast("บันทึกข้อมูลเรียบร้อย");
+            
+        } catch (error) {
+            alert("บันทึกไม่สำเร็จ: " + error.message);
+        } finally {
+            hideLoading();
         }
-        document.getElementById('email-modal').classList.add('hidden');
-        showToast("บันทึกอีเมลเรียบร้อย");
     }
 
     function renderIncomingSubmissions() { 
