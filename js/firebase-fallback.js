@@ -5,6 +5,7 @@ class FirebaseFallback {
         this.fallbackMode = false;
         this.quotaErrors = 0;
         this.maxQuotaErrors = 3;
+        this.lastSuccessTime = 0;
     }
     
     // Check if we should use Firebase
@@ -20,9 +21,9 @@ class FirebaseFallback {
     }
     
     // Handle quota errors
-    handleQuotaError() {
+    handleQuotaError(error) {
         this.quotaErrors++;
-        console.warn(`Quota error #${this.quotaErrors}`);
+        console.warn(`Quota error #${this.quotaErrors}:`, error?.message || error);
         
         if (this.quotaErrors >= this.maxQuotaErrors) {
             this.fallbackMode = true;
@@ -31,13 +32,26 @@ class FirebaseFallback {
         }
     }
     
-    // Reset quota errors (e.g., after successful sync)
-    resetQuotaErrors() {
+    // Handle success
+    handleSuccess() {
+        // Reset quota errors after successful operation
         if (this.quotaErrors > 0) {
-            console.log(`Resetting quota errors (was ${this.quotaErrors})`);
+            console.log(`Resetting quota errors after success (was ${this.quotaErrors})`);
             this.quotaErrors = 0;
             this.fallbackMode = false;
         }
+        this.lastSuccessTime = Date.now();
+    }
+    
+    // Reset quota errors manually
+    resetQuotaErrors() {
+        if (this.quotaErrors > 0) {
+            console.log(`Manually resetting quota errors (was ${this.quotaErrors})`);
+            this.quotaErrors = 0;
+            this.fallbackMode = false;
+            return true;
+        }
+        return false;
     }
     
     // Get status
@@ -46,21 +60,30 @@ class FirebaseFallback {
             useFirebase: this.shouldUseFirebase(),
             fallbackMode: this.fallbackMode,
             quotaErrors: this.quotaErrors,
-            firebaseInitialized: firebaseInitialized
+            firebaseInitialized: firebaseInitialized,
+            firebaseLoadError: firebaseLoadError
         };
+    }
+    
+    // Enable Firebase again
+    enableFirebase() {
+        this.fallbackMode = false;
+        this.quotaErrors = 0;
+        console.log("Firebase re-enabled");
     }
 }
 
+// Create global instance
 const firebaseFallback = new FirebaseFallback();
 
-// Update the updateSyncUI function in data.js
+// Update the updateSyncUI function
 function updateSyncUI(text, color) {
     const statusElements = document.querySelectorAll('#sync-status, #sync-status-scan');
     
     // Add fallback indicator
     let statusText = text;
-    if (firebaseFallback.fallbackMode) {
-        statusText = text + " (No Cache)";
+    if (firebaseFallback.fallbackMode && text.includes('Online')) {
+        statusText = text.replace('Online', 'Online (No Cache)');
     }
     
     statusElements.forEach(element => {
@@ -73,10 +96,14 @@ function updateSyncUI(text, color) {
     if(statusIcon) {
         if (firebaseFallback.fallbackMode) {
             statusIcon.className = "fa-solid fa-wifi text-yellow-400";
-            statusIcon.parentElement.className = `text-xs text-yellow-400 font-bold transition-all`;
+            if (statusIcon.parentElement) {
+                statusIcon.parentElement.className = "text-xs text-yellow-400 font-bold transition-all";
+            }
         } else {
             statusIcon.className = color === 'green' ? "fa-solid fa-wifi" : "fa-solid fa-wifi text-red-400 animate-pulse";
-            statusIcon.parentElement.className = `text-xs text-${color}-400 font-bold transition-all`;
+            if (statusIcon.parentElement) {
+                statusIcon.parentElement.className = `text-xs text-${color}-400 font-bold transition-all`;
+            }
         }
     }
 }
