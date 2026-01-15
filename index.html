@@ -35,8 +35,6 @@
      <nav class="inline-flex rounded-full bg-black/20 p-1 border border-white/5">
         <button id="tab-btn-admin" onclick="switchMainTab('admin')" class="px-6 py-2 rounded-full text-sm font-bold text-white/50 hover:text-white transition-all"><i class="fa-solid fa-chalkboard-user mr-2"></i>คุณครู</button> 
         <button id="tab-btn-student" onclick="switchMainTab('student')" class="px-6 py-2 rounded-full text-sm font-bold text-white/50 hover:text-white transition-all"><i class="fa-solid fa-user-graduate mr-2"></i>นักเรียน</button>
-        <!-- เพิ่มปุ่ม debug (optional) -->
-        <button onclick="debugFirebase()" class="px-4 py-2 rounded-full text-sm font-bold text-gray-400 hover:text-white transition-all hidden"><i class="fa-solid fa-bug mr-2"></i>Debug</button>
      </nav>
     </header>
 
@@ -320,6 +318,7 @@
   <!-- JavaScript Files -->
   <script src="js/config.js"></script>
   <script src="js/firebase-config.js"></script>
+  <script src="js/firebase-fallback.js"></script>
   <script src="js/firebase-data.js"></script>
   <script src="js/data.js"></script>
   <script src="js/calculations.js"></script>
@@ -328,7 +327,6 @@
   <script src="js/forms.js"></script>
   <script src="js/export.js"></script>
   <script src="js/events.js"></script>
-  <script src="js/debug.js"></script>
   <script src="js/main.js"></script>
   
  </body>
