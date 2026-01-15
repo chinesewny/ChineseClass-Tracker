@@ -1,25 +1,13 @@
 // Data synchronization and storage functions (Updated with better error handling)
 
-// Global variables
-let dataState = {
-    subjects: [],
-    classes: [],
-    students: [],
-    tasks: [],
-    scores: [],
-    attendance: [],
-    materials: [],
-    submissions: [],
-    returns: [],
-    schedules: []
-};
-
-let requestQueue = [];
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwQNjMSE06u5xO4dtyipa5P-YzoaicppubdwlUgMpaX4L4TUjk3-xY2PRnzhS42AxZe/exec';
+// REMOVED: Don't redeclare these variables - they are already in config.js
+// var dataState = {...}
+// var requestQueue = [];
+// var GOOGLE_SCRIPT_URL = '...';
 
 async function syncData() {
     // If queue is pending, don't fetch new data
-    if (requestQueue.length > 0) {
+    if (requestQueue.length > 0 && typeof processQueue === 'function') {
         processQueue();
         return;
     }
@@ -34,7 +22,9 @@ async function syncData() {
 
     try {
         // Step 1: Try to load from Firebase cache first (fast)
-        if (typeof firebaseFallback !== 'undefined' && firebaseFallback.shouldUseFirebase()) {
+        if (typeof firebaseFallback !== 'undefined' && 
+            typeof firebaseFallback.shouldUseFirebase === 'function' && 
+            firebaseFallback.shouldUseFirebase()) {
             try {
                 const cachedData = await firebaseManager.loadAllData();
                 
@@ -79,9 +69,11 @@ async function syncFromGoogleSheet() {
             dataState = result.data || result;
             
             // Save to Firebase cache (background) - with error handling
-            if (typeof firebaseFallback !== 'undefined' && firebaseFallback.shouldUseFirebase()) {
+            if (typeof firebaseFallback !== 'undefined' && 
+                firebaseFallback.shouldUseFirebase()) {
                 setTimeout(() => {
-                    if (typeof firebaseManager !== 'undefined') {
+                    if (typeof firebaseManager !== 'undefined' && 
+                        typeof firebaseManager.saveAllData === 'function') {
                         firebaseManager.saveAllData(dataState).catch(err => {
                             console.warn("Failed to save to Firebase cache (non-critical):", err.message);
                         });
@@ -95,7 +87,8 @@ async function syncFromGoogleSheet() {
             updateSyncUI('Online', 'green');
             
             // Reset quota errors on successful sync
-            if (typeof firebaseFallback !== 'undefined') {
+            if (typeof firebaseFallback !== 'undefined' && 
+                typeof firebaseFallback.handleSuccess === 'function') {
                 firebaseFallback.handleSuccess();
             }
         }
@@ -110,7 +103,9 @@ function updateSyncUI(text, color) {
     
     // Add fallback indicator
     let statusText = text;
-    if (typeof firebaseFallback !== 'undefined' && firebaseFallback.fallbackMode && text.includes('Online')) {
+    if (typeof firebaseFallback !== 'undefined' && 
+        firebaseFallback.fallbackMode && 
+        text.includes('Online')) {
         statusText = text.replace('Online', 'Online (No Cache)');
     }
     
@@ -122,7 +117,8 @@ function updateSyncUI(text, color) {
     
     const statusIcon = document.querySelector('.fa-wifi');
     if(statusIcon) {
-        if (typeof firebaseFallback !== 'undefined' && firebaseFallback.fallbackMode) {
+        if (typeof firebaseFallback !== 'undefined' && 
+            firebaseFallback.fallbackMode) {
             statusIcon.className = "fa-solid fa-wifi text-yellow-400";
             if (statusIcon.parentElement) {
                 statusIcon.parentElement.className = "text-xs text-yellow-400 font-bold transition-all";
@@ -243,13 +239,15 @@ async function saveAndRefresh(payload) {
     updateQueueBadge();
     
     // 3. Try to process immediately if online
-    if(navigator.onLine) {
+    if(navigator.onLine && typeof processQueue === 'function') {
         processQueue();
     }
 }
 
 function processQueue() {
-    if (requestQueue.length === 0) return;
+    if (requestQueue.length === 0 || isProcessingQueue) return;
+    
+    isProcessingQueue = true;
     
     // Show processing indicator
     updateQueueBadge();
@@ -289,6 +287,9 @@ function processQueue() {
         // Move to end of queue for retry
         requestQueue.push(requestQueue.shift());
         updateQueueBadge();
+    })
+    .finally(() => {
+        isProcessingQueue = false;
     });
 }
 
@@ -304,130 +305,19 @@ function updateQueueBadge() {
     }
 }
 
-// Student dashboard rendering
-function renderStudentDashboard(studentCode) {
-    const student = dataState.students.find(s => s.code === studentCode || s.id === studentCode);
-    if (!student) return;
-    
-    // Update student info
-    const nameEl = document.getElementById('std-dash-name');
-    const classEl = document.getElementById('std-dash-class');
-    
-    if (nameEl) nameEl.textContent = student.name || '-';
-    if (classEl) classEl.textContent = student.class || '-';
-    
-    // Render subjects
-    const container = document.getElementById('std-subjects-container');
-    if (!container) return;
-    
-    container.innerHTML = '';
-    
-    // Get student's class
-    const studentClass = dataState.classes.find(c => 
-        c.id === student.classId || c.name === student.class
-    );
-    
-    if (!studentClass) return;
-    
-    // Get subjects for this class
-    const classSubjects = dataState.subjects.filter(s => 
-        s.id === studentClass.subjectId
-    );
-    
-    classSubjects.forEach(subject => {
-        const subjectCard = createStudentSubjectCard(student, subject);
-        container.appendChild(subjectCard);
-    });
-}
-
-function createStudentSubjectCard(student, subject) {
-    const card = document.createElement('div');
-    card.className = 'glass-ios p-5 rounded-2xl border border-white/10';
-    
-    // Calculate scores for this student in this subject
-    const studentScores = dataState.scores.filter(s => 
-        s.studentId === student.id && s.subjectId === subject.id
-    );
-    
-    const totalScore = studentScores.reduce((sum, score) => sum + (parseFloat(score.score) || 0), 0);
-    const maxScore = studentScores.reduce((sum, score) => sum + (parseFloat(score.max) || 0), 0);
-    const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
-    
-    card.innerHTML = `
-        <div class="flex justify-between items-start mb-4">
-            <div>
-                <h3 class="text-lg font-bold text-white">${subject.name || 'วิชา'}</h3>
-                <p class="text-blue-300 text-sm">${student.class || 'ห้อง'}</p>
-            </div>
-            <div class="text-right">
-                <div class="text-2xl font-bold text-yellow-400">${percentage}%</div>
-                <div class="text-xs text-white/50">คะแนนรวม</div>
-            </div>
-        </div>
+// Student dashboard rendering (fallback if not in ui.js)
+if (typeof renderStudentDashboard === 'undefined') {
+    function renderStudentDashboard(studentCode) {
+        const student = dataState.students.find(s => s.code === studentCode || s.id === studentCode);
+        if (!student) return;
         
-        <div class="mb-4">
-            <div class="flex justify-between text-xs text-white/70 mb-1">
-                <span>ความคืบหน้า</span>
-                <span>${totalScore}/${maxScore}</span>
-            </div>
-            <div class="w-full bg-white/10 rounded-full h-2 overflow-hidden">
-                <div class="bg-gradient-to-r from-blue-500 to-purple-500 h-2 rounded-full transition-all duration-1000" 
-                     style="width: ${percentage}%"></div>
-            </div>
-        </div>
+        // Update student info
+        const nameEl = document.getElementById('std-dash-name');
+        const classEl = document.getElementById('std-dash-class');
         
-        <div class="grid grid-cols-3 gap-2 mb-4">
-            <div class="text-center p-2 bg-white/5 rounded-lg">
-                <div class="text-green-400 text-lg font-bold">${studentScores.filter(s => s.score > 0).length}</div>
-                <div class="text-[10px] text-white/50">ส่งแล้ว</div>
-            </div>
-            <div class="text-center p-2 bg-white/5 rounded-lg">
-                <div class="text-yellow-400 text-lg font-bold">${studentScores.length}</div>
-                <div class="text-[10px] text-white/50">งานทั้งหมด</div>
-            </div>
-            <div class="text-center p-2 bg-white/5 rounded-lg">
-                <div class="text-red-400 text-lg font-bold">${dataState.tasks.filter(t => t.subjectId === subject.id).length - studentScores.length}</div>
-                <div class="text-[10px] text-white/50">ค้างส่ง</div>
-            </div>
-        </div>
+        if (nameEl) nameEl.textContent = student.name || '-';
+        if (classEl) classEl.textContent = student.class || '-';
         
-        <button onclick="viewSubjectDetails('${subject.id}', '${student.id}')" 
-                class="w-full py-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-800 text-white font-bold hover:from-blue-500 hover:to-blue-700 transition-all">
-            ดูรายละเอียด
-        </button>
-    `;
-    
-    return card;
-}
-
-function viewSubjectDetails(subjectId, studentId) {
-    // This function should open a modal with detailed subject information
-    console.log("View subject details:", subjectId, studentId);
-    // Implement modal opening logic here
-}
-
-// Default function to ensure it exists
-if (typeof refreshUI === 'undefined') {
-    function refreshUI() {
-        console.log("refreshUI called from data.js");
-        // Update various UI components based on dataState
-    }
-}
-
-if (typeof showLoading === 'undefined') {
-    function showLoading(text) {
-        console.log("Loading:", text);
-    }
-}
-
-if (typeof hideLoading === 'undefined') {
-    function hideLoading() {
-        console.log("Hide loading");
-    }
-}
-
-if (typeof showToast === 'undefined') {
-    function showToast(message, colorClass, icon) {
-        console.log("Toast:", message);
+        console.log("Student dashboard rendered for:", student.name);
     }
 }
