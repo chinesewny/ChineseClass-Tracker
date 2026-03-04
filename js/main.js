@@ -22,13 +22,13 @@ import {
     closeExamModal,
     addQuestionItem,
     openEditColumnModal, renderScoreManagerTable, editChapterConfig,renderExamManagerPage,renderMainExamHub
-} from "./ui-render.js";
-import { previewTasksBySubject } from "./ui-render.js"; // Import เข้ามา
+} from "./ui-render.js?v=4";
+import { previewTasksBySubject } from "./ui-render.js?v=4"; // Import เข้ามา
 
 window.previewTasksBySubject = previewTasksBySubject; // ผูกกับ Window
 // --- ส่วน Lucky Draw ---
-import { setLuckyMode, startLuckyDraw, clearLuckyHistory } from "./ui-render.js";
-import { openEditChapterModal } from "./ui-render.js"; // อย่าลืม import
+import { setLuckyMode, startLuckyDraw, clearLuckyHistory } from "./ui-render.js?v=4";
+import { openEditChapterModal } from "./ui-render.js?v=4"; // อย่าลืม import
 import { getThaiDateISO, formatThaiDate, calGrade, showToast, showLoading, hideLoading, calculateScores, compressImage } from "./utils.js";
 import { PERIODS } from "./config.js";
 // --- Global Functions (Exposed to Window) ---
@@ -144,47 +144,64 @@ window.checkAutoLogin = function() {
 };
 
 // อย่าลืมเรียกใช้ checkAutoLogin() หลังจากที่โหลดข้อมูลนักเรียนเสร็จแล้วนะครับ
+let _studentLoginInProgress = false;
 window.handleStudentLogin = async function() {
-    // 1. รับค่าและล้างช่องว่างที่มองไม่เห็นทั้งหมด
-    let rawInput = document.getElementById('student-login-id').value;
-    if (!rawInput || !rawInput.trim()) return alert("กรุณากรอกรหัสนักเรียน");
+    // ป้องกันกดซ้ำหลายครั้งพร้อมกัน (debounce)
+    if (_studentLoginInProgress) return;
+    _studentLoginInProgress = true;
 
-    // ตัดช่องว่างทุกชนิดและแปลงเป็นพิมพ์เล็ก
-    const inputId = String(rawInput).replace(/\s+/g, '').toLowerCase();
+    const loginBtn = document.getElementById('btn-student-login');
+    if (loginBtn) { loginBtn.disabled = true; loginBtn.textContent = 'กำลังตรวจสอบ...'; }
 
-    // 2. ระบบรอโหลดฐานข้อมูลสูงสุด 4 วินาที (แก้ปัญหาเน็ตช้า)
-    if (!dataState.students || dataState.students.length === 0) {
-        if(typeof showLoading === 'function') showLoading("กำลังดึงข้อมูลรายชื่อ...");
-        let attempts = 0;
-        while (dataState.students.length === 0 && attempts < 40) {
-            await new Promise(r => setTimeout(r, 100));
-            attempts++;
+    try {
+        // 1. รับค่าและล้างช่องว่างที่มองไม่เห็นทั้งหมด
+        let rawInput = document.getElementById('student-login-id').value;
+        if (!rawInput || !rawInput.trim()) { alert("กรุณากรอกรหัสนักเรียน"); return; }
+
+        const inputId = String(rawInput).replace(/\s+/g, '').toLowerCase();
+
+        // 2. รอโหลดฐานข้อมูลสูงสุด 10 วินาที (เพิ่มจาก 4 วิ สำหรับเน็ตช้า)
+        if (!dataState.students || dataState.students.length === 0) {
+            showLoading("กำลังเชื่อมต่อ Firebase...");
+            let attempts = 0;
+            while (dataState.students.length === 0 && attempts < 100) {
+                await new Promise(r => setTimeout(r, 100));
+                attempts++;
+            }
+            hideLoading();
         }
-    }
-    
-    if(typeof hideLoading === 'function') hideLoading();
 
-    // 3. ค้นหารายชื่อแบบยืดหยุ่น (ล้างช่องว่างในฐานข้อมูลก่อนเทียบ)
-    const student = dataState.students.find(s => {
-        if (!s.code) return false;
-        const dbCode = String(s.code).replace(/\s+/g, '').toLowerCase();
-        const dbId = String(s.id).replace(/\s+/g, '').toLowerCase();
-        return dbCode === inputId || dbId === inputId;
-    });
-
-    // 4. แสดงผล
-    if (student) {
-        localStorage.setItem('current_student_code', student.code);
-        document.getElementById('student-login-wrapper').classList.add('hidden');
-        document.getElementById('student-dashboard').classList.remove('hidden');
-        
-        if (typeof renderStudentDashboard === 'function') {
-            renderStudentDashboard(student.code);
+        // 3. ถ้าหมดเวลายังไม่มีข้อมูล แจ้งให้ลองใหม่แทนที่จะแจ้งว่าไม่พบชื่อ
+        if (!dataState.students || dataState.students.length === 0) {
+            showToast("เชื่อมต่อช้า กรุณากดปุ่มเข้าสู่ระบบอีกครั้ง", "bg-orange-500 border-orange-400");
+            return;
         }
-        if (typeof showToast === 'function') showToast(`ยินดีต้อนรับ ${student.name}`);
-    } else {
-        alert(`ไม่พบรายชื่อในระบบ!\n\nรหัสที่คุณพิมพ์คือ: "${inputId}"\n(โปรดตรวจสอบความถูกต้องอีกครั้ง หรือแจ้งคุณครูผู้สอน)`);
-        if (typeof showToast === 'function') showToast("ไม่พบรายชื่อนี้ในระบบ", "bg-red-600 border-red-400");
+
+        // 4. ค้นหารายชื่อแบบยืดหยุ่น (ตัดช่องว่าง + พิมพ์เล็ก)
+        const student = dataState.students.find(s => {
+            if (!s.code) return false;
+            const dbCode = String(s.code).replace(/\s+/g, '').toLowerCase();
+            const dbId   = String(s.id).replace(/\s+/g, '').toLowerCase();
+            return dbCode === inputId || dbId === inputId;
+        });
+
+        // 5. แสดงผล
+        if (student) {
+            localStorage.setItem('current_student_code', student.code);
+            window.currentStudentId = student.id; // เก็บ ID ไว้ให้ระบบสอบใช้ด้วย
+            document.getElementById('student-login-wrapper').classList.add('hidden');
+            document.getElementById('student-dashboard').classList.remove('hidden');
+            if (typeof renderStudentDashboard === 'function') renderStudentDashboard(student.code);
+            showToast(`ยินดีต้อนรับ ${student.name}`);
+        } else {
+            alert(`ไม่พบรายชื่อในระบบ!\n\nรหัสที่คุณพิมพ์คือ: "${inputId}"\n(โปรดตรวจสอบความถูกต้องอีกครั้ง หรือแจ้งคุณครูผู้สอน)`);
+            showToast("ไม่พบรายชื่อนี้ในระบบ", "bg-red-600 border-red-400");
+        }
+    } finally {
+        // คืนสถานะปุ่มเสมอ ไม่ว่าจะสำเร็จหรือ error
+        _studentLoginInProgress = false;
+        if (loginBtn) { loginBtn.disabled = false; loginBtn.textContent = 'เข้าสู่ระบบ'; }
+        hideLoading();
     }
 };
 
@@ -1334,7 +1351,7 @@ window.saveColumnEdit = function() {
         }
     }
 };
-import { addTaskToChapter } from "./ui-render.js";
+import { addTaskToChapter } from "./ui-render.js?v=4";
 window.addTaskToChapter = addTaskToChapter;
 window.renderScoreManagerPanel = renderScoreManagerPanel;
 window.renderScoreManagerTable = renderScoreManagerTable;
@@ -1343,12 +1360,12 @@ window.openExamEditor = openExamEditor;
 window.closeExamModal = closeExamModal;
 window.addQuestionItem = addQuestionItem;
 // --- ผูกฟังก์ชันแก้ไขงาน (Task Modal) ให้ HTML เรียกใช้ได้ ---
-import { openEditTaskModal } from "./ui-render.js";
+import { openEditTaskModal } from "./ui-render.js?v=4";
 
 window.openEditTaskModal = openEditTaskModal;
 // ในไฟล์ js/main.js (ท้ายไฟล์)
 
-import { openStudentTaskModal } from "./ui-render.js"; // Import เพิ่ม
+import { openStudentTaskModal } from "./ui-render.js?v=4"; // Import เพิ่ม
 window.openStudentTaskModal = openStudentTaskModal;   // ผูก window
 
 // ฟังก์ชันส่งงานนักเรียน
@@ -1982,15 +1999,22 @@ function removeAntiCheat() {
 }
 
 function handleVisibilityChange() {
+    // ไม่นับถ้ากำลังเปิด dialog (prompt/alert) หรือยังไม่ได้เริ่มสอบจริง
+    if (window._examDialogOpen || !window.currentExam) return;
     if (document.hidden) {
         triggerViolation("สลับหน้าจอ / พับหน้าจอ");
     }
 }
 
 function handleBlur() {
-    // เช็คเพิ่มเติมเพื่อป้องกัน False Positive (บางทีแค่คลิกพื้นที่ว่างใน Browser ก็โดน)
-    if(document.activeElement === document.querySelector('iframe')) return; 
-    triggerViolation("คลิกออกนอกหน้าต่างสอบ");
+    // ไม่นับถ้ากำลังเปิด dialog หรือโฟกัส iframe หรือยังไม่เริ่มสอบ
+    if (window._examDialogOpen || !window.currentExam) return;
+    if(document.activeElement === document.querySelector('iframe')) return;
+    // หน่วงเวลาเล็กน้อยเพื่อป้องกัน false positive จาก focus ภายใน page เอง
+    setTimeout(() => {
+        if (document.hasFocus() || window._examDialogOpen) return;
+        triggerViolation("คลิกออกนอกหน้าต่างสอบ");
+    }, 200);
 }
 
 function triggerViolation(reason) {
@@ -2164,29 +2188,35 @@ function recordExamScore(examId, studentId, score) {
 
 // ฟังก์ชันช่วยอัพเดทสถานะ Realtime (จำลองโดยการบันทึกเข้า dataState.examSessions)
 function updateExamSessionStatus(examId, studentId, status, violations = 0, score = 0) {
-    // หา Session เดิม
+    // ป้องกัน type mismatch (number vs string) — Firestore อาจคืนค่า id เป็น type ต่างกัน
+    const examIdStr    = String(examId);
+    const studentIdStr = String(studentId);
+
     let sessions = dataState.examSessions || [];
-    let session = sessions.find(s => s.examId === examId && s.studentId === studentId);
+    // ใช้ String() เปรียบเทียบเพื่อป้องกัน "12345" !== 12345 ที่ทำให้สร้าง session ซ้ำ
+    let session = sessions.find(s => String(s.examId) === examIdStr && String(s.studentId) === studentIdStr);
 
     if(session) {
-        session.status = status;
+        session.status     = status;
         session.violations = violations;
-        session.score = score;
+        session.score      = score;
         session.lastUpdate = new Date().getTime();
     } else {
         sessions.push({
-            examId, studentId, status, violations, score,
-            startTime: new Date().getTime(),
+            examId:     examIdStr,    // เก็บเป็น String เสมอ
+            studentId:  studentIdStr, // เก็บเป็น String เสมอ
+            status, violations, score,
+            startTime:  new Date().getTime(),
             lastUpdate: new Date().getTime()
         });
     }
-    
+
     dataState.examSessions = sessions;
-    
-    // บันทึกเงียบๆ (ไม่ต้อง Refresh หน้าจอ) -> แต่ถ้าจะให้ครูเห็น Realtime 
-    // ควรใช้ Firebase set() โดยตรงแยกต่างหาก แต่เพื่อความง่ายใช้ saveAndRefresh แบบไม่ reload
+
+    // บันทึกลงเครื่องและ sync ไป Firebase โดยไม่เรียก syncData() ซ้ำ
+    // (syncData() จะสมัคร onSnapshot listener ใหม่ทุกครั้ง ทำให้เกิด memory leak)
     saveToLocalStorage();
-    syncData(); // ส่งไป Firebase
+    saveAndRefresh(); // ใช้ saveAndRefresh แทน syncData เพื่อ push ข้อมูลขึ้นฝั่งเดียว
 }
 
 window.resetStudentExam = async function(examId, studentId) {
@@ -2475,85 +2505,79 @@ function finalizeQuestion(qObj, choicesRaw, qArray) {
 }
 // ในไฟล์ js/main.js
 window.startExamProcess = function(examId) {
-    const exam = dataState.exams.find(e => e.id === examId);
-    if (!exam) return;
+    // แปลงเป็น String เพื่อให้ === เปรียบเทียบถูกต้องเสมอ (แก้ปัญหา number vs string)
+    const examIdStr = String(examId);
+    const exam = dataState.exams.find(e => String(e.id) === examIdStr);
+    if (!exam) { alert("ไม่พบข้อมูลการสอบ กรุณารีโหลดหน้าจอ"); return; }
 
-    // รับค่า ID นักเรียน
+    // รับค่า ID นักเรียน — เรียงลำดับความน่าเชื่อถือจากมากไปน้อย
     let studentId = window.currentStudentId;
     if (!studentId) {
-        if (globalState.currentUser && globalState.currentUser.id) {
-            studentId = globalState.currentUser.id;
-        } else {
-            const code = localStorage.getItem('current_student_code');
-            const student = dataState.students.find(s => String(s.code) === String(code));
+        const code = localStorage.getItem('current_student_code');
+        if (code) {
+            const student = dataState.students.find(s => String(s.code).replace(/\s+/g,'').toLowerCase() === String(code).replace(/\s+/g,'').toLowerCase());
             if (student) studentId = student.id;
         }
     }
+    if (!studentId && globalState.currentUser?.id) studentId = globalState.currentUser.id;
 
     if (!studentId) {
-        alert("Error: ไม่พบข้อมูลรหัสนักเรียน (Student ID Missing)");
+        alert("ไม่พบข้อมูลนักเรียน กรุณาเข้าสู่ระบบใหม่อีกครั้ง");
         return;
     }
 
-    // เช็คสถานะการสอบ
-    const session = dataState.examSessions?.find(s => s.examId === examId && s.studentId === studentId);
+    // บันทึก currentStudentId ไว้ใน global เพื่อให้ Anti-cheat และ submitExam ใช้ได้
+    window.currentStudentId = studentId;
+    const studentIdStr = String(studentId);
+
+    // เช็คสถานะการสอบ (ใช้ String comparison ตลอด)
+    const sessions = dataState.examSessions || [];
+    const session = sessions.find(s => String(s.examId) === examIdStr && String(s.studentId) === studentIdStr);
     if (session && session.status === 'FINISHED') return alert("คุณส่งข้อสอบชุดนี้ไปแล้ว");
     if (session && session.status === 'CHEATED') return alert("คุณถูกระงับสิทธิ์การสอบในวิชานี้");
 
-    // ถามรหัสผ่าน
+    // ถามรหัสผ่าน — ปิด Anti-cheat ชั่วคราวก่อนแสดง dialog เพื่อป้องกัน false positive
     if (exam.password && (!session || session.status !== 'TESTING')) {
+        window._examDialogOpen = true;
         const input = prompt(`🔒 กรุณาใส่รหัสผ่านเข้าห้องสอบ: ${exam.title}`);
-        if (input !== exam.password) return alert("❌ รหัสผ่านไม่ถูกต้อง!");
+        window._examDialogOpen = false;
+        if (input === null) return; // กด Cancel
+        if (String(input).trim() !== String(exam.password).trim()) {
+            alert("❌ รหัสผ่านไม่ถูกต้อง!");
+            return;
+        }
     }
 
-    // เริ่มต้น Session
+    // เริ่มต้น Session ใหม่ (ถ้ายังไม่มี)
     if (!session) {
         const newSession = {
-            examId: exam.id,
-            studentId: studentId,
+            examId: examIdStr,
+            studentId: studentIdStr,
             status: 'TESTING',
             score: 0,
             answers: {},
             startTime: new Date().getTime(),
             violations: 0
         };
-        
         if (!dataState.examSessions) dataState.examSessions = [];
         dataState.examSessions.push(newSession);
-
-        // ⭐ แก้ไขจุดที่ Error: ต้องใส่ Object เข้าไปใน saveAndRefresh
-        saveAndRefresh({ 
-            action: 'updateExamSession', 
-            session: newSession 
-        }); 
+        saveAndRefresh({ action: 'updateExamSession', session: newSession });
     }
 
     // พาไปหน้าสอบ
     const dashboard = document.getElementById('main-app-container');
     const overlay = document.getElementById('exam-room-overlay');
-    
     if(dashboard) dashboard.classList.add('hidden');
-    if(overlay) {
-        overlay.classList.remove('hidden');
-        overlay.classList.add('flex');
-    }
+    if(overlay) { overlay.classList.remove('hidden'); overlay.classList.add('flex'); }
 
-    // ⭐ กำหนดตัวแปร Global และส่งค่าไปให้ renderExamUI โดยตรง
-    window.currentExam = exam; 
+    window.currentExam = exam;
 
-    // ==========================================
-    // 🟢 เพิ่มโค้ด Auto-Resume บันทึกสถานะนักเรียนตรงนี้
-    // ==========================================
-    const studentInfo = dataState.students.find(s => s.id === studentId);
+    // บันทึก session ลง localStorage สำหรับ Auto-Resume
+    const studentInfo = dataState.students.find(s => String(s.id) === studentIdStr);
     const classId = studentInfo ? studentInfo.classId : null;
-    
-    if (typeof saveStudentSession === 'function') {
-        // บันทึกความจำลงเครื่องว่าเด็กคนนี้กำลังสอบวิชานี้อยู่
-        saveStudentSession(studentId, classId, exam.id);
-    }
-    // ==========================================
-    
-    // เรียก renderExamUI โดยส่ง exam เข้าไปเพื่อป้องกันค่า null
+    if (typeof saveStudentSession === 'function') saveStudentSession(studentId, classId, exam.id);
+
+    // เรียก renderExamUI
     if (typeof window.renderExamUI === 'function') {
         window.renderExamUI(exam);
     }
@@ -3127,7 +3151,7 @@ window.loadMaterialsFromSheet = async function() {
             
             // สั่ง render หน้าจอใหม่ (ถ้าเปิดหน้า Admin Material อยู่)
             if(document.getElementById('admin-panel-material')) {
-                 import('./ui-render.js').then(module => {
+                 import('./ui-render.js?v=4').then(module => {
                      module.renderAdminMaterials();
                  });
             }
@@ -3177,7 +3201,7 @@ window.saveMaterial = async function() {
         titleEl.value = ""; linkEl.value = ""; imgEl.value = "";
         
         // รีเฟรชหน้าจอ
-        import('./ui-render.js').then(module => module.renderAdminMaterials());
+        import('./ui-render.js?v=4').then(module => module.renderAdminMaterials());
         
         showToast("บันทึกเรียบร้อย", "success");
 
@@ -3205,7 +3229,7 @@ window.deleteMaterial = async function(id) {
         dataState.materials = dataState.materials.filter(m => m.id != id);
         
         // รีเฟรชหน้าจอ
-        import('./ui-render.js').then(module => module.renderAdminMaterials());
+        import('./ui-render.js?v=4').then(module => module.renderAdminMaterials());
         
         showToast("ลบเรียบร้อย", "success");
 

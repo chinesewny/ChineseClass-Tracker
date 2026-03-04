@@ -1,5 +1,6 @@
 import { dataState, globalState, saveStudentSession, clearStudentSession } from "./state.js";
 import { calculateScores, calGrade, formatThaiDate, getThaiDateISO, showToast, showLoading, hideLoading } from "./utils.js";
+window.formatThaiDate = formatThaiDate;
 window.renderStudentDashboard = renderStudentDashboard;
 // --- 1. Helper Functions (Dropdowns & Checkboxes) ---
 
@@ -720,10 +721,18 @@ export function renderExamTable() {
     // 3. เตรียมข้อมูล
     const students = dataState.students.filter(s => s.classId == classId).sort((a,b) => Number(a.no) - Number(b.no));
     
-    const allExamTasks = dataState.tasks.filter(t => 
-        t.classId == classId && 
+    const allExamTasks = dataState.tasks.filter(t =>
+        t.classId == classId &&
         ['midterm', 'special_mid', 'final', 'special_final'].includes(t.category)
     ).sort((a,b) => a.id - b.id);
+
+    // --- Online exam columns ---
+    const cls4Exam = dataState.classes.find(c => String(c.id) === String(classId));
+    const subjId4Exam = cls4Exam ? cls4Exam.subjectId : null;
+    const onlineExamCols = (dataState.exams || []).filter(ex =>
+        String(ex.subjectId) === String(subjId4Exam) &&
+        ex.category && ex.category !== 'none'
+    ).sort((a, b) => (a.title || '').localeCompare(b.title || ''));
 
     // =========================================
     // 4. สร้าง Header (หัวตาราง)
@@ -753,6 +762,20 @@ export function renderExamTable() {
                     <div class="text-[9px] text-gray-500 bg-white border border-gray-200 px-1.5 py-0.5 rounded-sm shadow-sm">Max: ${t.maxScore}</div>
                 </div>
                 <button onclick="window.deleteTask('${t.id}')" class="absolute top-1 right-1 p-1 text-gray-400 hover:text-[#C53D43] text-[10px] opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded-full w-4 h-4 flex items-center justify-center border border-gray-200 hover:border-[#C53D43]" title="ลบคอลัมน์นี้"><i class="fa-solid fa-xmark"></i></button>
+            </th>
+        `;
+    });
+
+    // --- Online exam header columns ---
+    onlineExamCols.forEach(ex => {
+        const catLabel = ex.category === 'midterm' ? 'กลางภาค' : ex.category === 'final' ? 'ปลายภาค' : 'เก็บคะแนน';
+        const catColor = ex.category === 'midterm' ? 'text-orange-700 bg-orange-50' : ex.category === 'final' ? 'text-purple-700 bg-purple-50' : 'text-teal-700 bg-teal-50';
+        headerHTML += `
+            <th class="px-2 py-3 text-center min-w-[100px] border-l border-gray-200 ${catColor} border-b border-gray-300">
+                <div class="text-[10px] font-bold truncate max-w-[90px]" title="${ex.title}">
+                    <i class="fa-solid fa-laptop-code mr-1 opacity-60"></i>${ex.title}
+                </div>
+                <div class="text-[9px] mt-0.5 opacity-70">${catLabel} • /${ex.questions?.length || '?'}</div>
             </th>
         `;
     });
@@ -828,6 +851,33 @@ export function renderExamTable() {
                            placeholder="-">
                 </td>
             `;
+        });
+
+        // --- Online exam data cells ---
+        onlineExamCols.forEach(ex => {
+            const sc = dataState.scores.find(x => String(x.studentId) === String(s.id) && String(x.taskId) === String(ex.id));
+            const exSession = (dataState.examSessions || [])
+                .filter(ss => String(ss.examId) === String(ex.id) && String(ss.studentId) === String(s.id))
+                .sort((a, b) => (b.lastUpdate || 0) - (a.lastUpdate || 0))[0] || null;
+
+            const val = (sc && sc.score !== null && sc.score !== undefined) ? sc.score : null;
+            const maxQ = ex.questions?.length || '?';
+            const isCheated = exSession?.status === 'CHEATED';
+            const isTesting = exSession && (exSession.status === 'TESTING' || exSession.status === 'WARNING');
+
+            let cellContent = `<span class="text-gray-300 text-xs">-</span>`;
+            if (isCheated) {
+                cellContent = `<span class="text-red-500 font-bold text-xs" title="ทุจริต">⛔ 0/${maxQ}</span>`;
+            } else if (val !== null) {
+                const pct = maxQ !== '?' ? Math.round((val / maxQ) * 100) : null;
+                const col  = pct !== null && pct < 50 ? 'text-red-500' : 'text-[#1A1A2E]';
+                cellContent = `<span class="font-bold ${col} text-sm">${val}</span><span class="text-[9px] text-gray-400">/${maxQ}</span>`;
+            } else if (isTesting) {
+                cellContent = `<span class="text-blue-400 text-[10px] animate-pulse">กำลังสอบ</span>`;
+            }
+
+            const catBg = ex.category === 'midterm' ? 'bg-orange-50/40' : ex.category === 'final' ? 'bg-purple-50/40' : 'bg-teal-50/40';
+            rowHTML += `<td class="p-1 border-r border-gray-200 text-center ${catBg} min-w-[100px]">${cellContent}</td>`;
         });
 
         rowHTML += `
@@ -914,9 +964,12 @@ export function generateTimelineHTML(studentId) {
         const isGraded = scoreRec && scoreRec.score !== null && scoreRec.score !== undefined;
         
         let timeStr = "ไม่ระบุเวลา";
-        if(sub.timestamp) {
-            const d = new Date(sub.timestamp);
-            timeStr = window.formatThaiDate(sub.timestamp) + ' ' + d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+        const subTs = sub.timestampISO || sub.timestamp;
+        if(subTs) {
+            const d = new Date(subTs);
+            if (!isNaN(d.getTime())) {
+                timeStr = formatThaiDate(subTs) + ' ' + d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+            }
         }
 
         let dotColor = 'bg-[#D4AF37] border-white'; // สีทอง (เพิ่งส่ง/รอตรวจ)
@@ -2373,26 +2426,108 @@ export function renderExamManagerPage(containerId = null) {
                         // ป้องกัน Error กรณีหา subject ไม่เจอ
                         const subj = dataState.subjects ? dataState.subjects.find(s => s.id == ex.subjectId) : null;
                         const subjName = subj ? subj.name : 'ไม่ระบุวิชา';
-                        
+                        const maxQ = ex.questions ? ex.questions.length : 0;
+
+                        // --- ประวัติผลการสอบ ---
+                        const activeClsIds = (ex.activeClasses || []).map(String);
+                        const activeStudents = dataState.students.filter(s => activeClsIds.includes(String(s.classId)))
+                            .sort((a, b) => Number(a.no) - Number(b.no));
+                        const totalStu = activeStudents.length;
+
+                        // หา sessions ล่าสุดของแต่ละนักเรียน (กรณีมี session ซ้ำให้เอา lastUpdate ล่าสุด)
+                        const sessionMap = {};
+                        (dataState.examSessions || [])
+                            .filter(ss => String(ss.examId) === String(ex.id))
+                            .forEach(ss => {
+                                const key = String(ss.studentId);
+                                if (!sessionMap[key] || (ss.lastUpdate || 0) > (sessionMap[key].lastUpdate || 0)) {
+                                    sessionMap[key] = ss;
+                                }
+                            });
+
+                        let finishedCount = 0, testingCount = 0, cheatedCount = 0;
+                        const historyRows = activeStudents.map(stu => {
+                            const sess = sessionMap[String(stu.id)] || null;
+                            const sc   = dataState.scores.find(x => String(x.taskId) === String(ex.id) && String(x.studentId) === String(stu.id));
+                            if (!sess && !sc) return ''; // ยังไม่เข้าสอบ
+
+                            const score = sc?.score ?? sess?.score ?? '-';
+                            let badge = '';
+                            if (sc || sess?.status === 'FINISHED') {
+                                finishedCount++;
+                                const pct = maxQ > 0 ? Math.round((score / maxQ) * 100) : null;
+                                const col = pct !== null && pct < 50 ? 'text-red-600' : 'text-green-700';
+                                badge = `<span class="bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full text-[9px] font-bold">✓ ส่งแล้ว</span>
+                                         <span class="font-bold ${col} ml-1">${score}/${maxQ}</span>`;
+                            } else if (sess?.status === 'CHEATED') {
+                                cheatedCount++;
+                                badge = `<span class="bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full text-[9px] font-bold">⛔ ทุจริต</span>
+                                         <span class="text-gray-400 ml-1 text-[9px]">${sess.violations || 0} ครั้ง</span>`;
+                            } else if (sess?.status === 'TESTING' || sess?.status === 'WARNING') {
+                                testingCount++;
+                                badge = `<span class="bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full text-[9px] font-bold animate-pulse">📝 กำลังสอบ</span>`;
+                            }
+                            return `<tr class="border-b border-gray-100 hover:bg-gray-50/50">
+                                <td class="px-2 py-1 text-gray-400 font-mono text-[10px] w-8">${stu.no}</td>
+                                <td class="px-2 py-1 text-xs text-[#1A1A2E] font-medium">${stu.name}</td>
+                                <td class="px-2 py-1 text-right">${badge}</td>
+                            </tr>`;
+                        }).filter(Boolean).join('');
+
+                        const notEnteredCount = totalStu - finishedCount - testingCount - cheatedCount;
+                        const progressPct     = totalStu > 0 ? Math.round(((finishedCount + cheatedCount) / totalStu) * 100) : 0;
+                        const catLabel = ex.category === 'midterm' ? 'กลางภาค' : ex.category === 'final' ? 'ปลายภาค' : ex.category === 'accum' ? 'เก็บคะแนน' : ex.category === 'none' ? 'ไม่นับคะแนน' : ex.category;
+                        const catColor = ex.category === 'midterm' ? 'bg-orange-100 text-orange-700' : ex.category === 'final' ? 'bg-purple-100 text-purple-700' : 'bg-teal-100 text-teal-700';
+
+                        const historySection = totalStu > 0 ? `
+                            <div class="mt-4 border-t border-gray-200 pt-4">
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="text-xs font-bold text-[#1A1A2E] flex items-center gap-1">
+                                        <i class="fa-solid fa-chart-simple text-yellow-500"></i> ประวัติผลการสอบ
+                                    </span>
+                                    <div class="flex gap-2 text-[10px] font-bold">
+                                        <span class="text-green-600">✓ ${finishedCount}</span>
+                                        <span class="text-blue-500">📝 ${testingCount}</span>
+                                        <span class="text-red-500">⛔ ${cheatedCount}</span>
+                                        <span class="text-gray-400">– ${notEnteredCount}</span>
+                                        <span class="text-gray-500">/ ${totalStu} คน</span>
+                                    </div>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-1.5 mb-3">
+                                    <div class="bg-green-500 h-1.5 rounded-full transition-all" style="width:${progressPct}%"></div>
+                                </div>
+                                ${historyRows ? `
+                                <div class="max-h-48 overflow-y-auto rounded border border-gray-200">
+                                    <table class="w-full text-xs">
+                                        <tbody>${historyRows}</tbody>
+                                    </table>
+                                </div>` : `<p class="text-[10px] text-gray-400 text-center py-2">ยังไม่มีนักเรียนเข้าสอบ</p>`}
+                            </div>
+                        ` : '';
+
                         return `
                         <div class="bg-[#F5F0E8] border border-gray-200 rounded-sm p-5 hover:border-yellow-500/50 transition-all group relative">
                             <div class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
                                 <button onclick="window.openExamModal('${ex.id}')" class="w-8 h-8 rounded-full bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-[#1A1A2E] flex items-center justify-center"><i class="fa-solid fa-pen"></i></button>
-                                
                                 <button onclick="window.deleteExam('${ex.id}')" class="w-8 h-8 rounded-full bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-[#1A1A2E] flex items-center justify-center"><i class="fa-solid fa-trash"></i></button>
                             </div>
-                            
-                            <span class="text-[10px] bg-white/10 px-2 py-0.5 rounded text-[#1A1A2E]/60 mb-2 inline-block">${subjName}</span>
+
+                            <div class="flex items-start gap-2 mb-1 flex-wrap">
+                                <span class="text-[10px] bg-white/10 px-2 py-0.5 rounded text-[#1A1A2E]/60">${subjName}</span>
+                                ${ex.category && ex.category !== 'none' ? `<span class="text-[10px] px-2 py-0.5 rounded font-bold ${catColor}">${catLabel}</span>` : ''}
+                            </div>
                             <h3 class="text-lg font-bold text-[#1A1A2E] mb-2 truncate">${ex.title}</h3>
                             <div class="flex gap-4 text-xs text-[#1A1A2E]/50 mb-4">
                                 <span><i class="fa-regular fa-clock text-yellow-500 mr-1"></i>${ex.timeLimit} นาที</span>
-                                <span><i class="fa-solid fa-list-ol text-blue-400 mr-1"></i>${ex.questions ? ex.questions.length : 0} ข้อ</span>
-                                <span><i class="fa-solid fa-key text-green-400 mr-1"></i>${ex.password}</span>
+                                <span><i class="fa-solid fa-list-ol text-blue-400 mr-1"></i>${maxQ} ข้อ</span>
+                                <span><i class="fa-solid fa-key text-green-400 mr-1"></i>${ex.password || 'ไม่มี'}</span>
                             </div>
 
                             <button onclick="window.openMonitorModal('${ex.id}')" class="w-full py-2 bg-white/10 border border-gray-200 rounded-lg text-[#1A1A2E]/80 hover:bg-green-600 hover:text-[#1A1A2E] hover:border-transparent transition-all flex items-center justify-center gap-2">
-                                <i class="fa-solid fa-tv"></i>เปิดห้องสอบ / ดูผล
+                                <i class="fa-solid fa-tv"></i>เปิดห้องสอบ / Monitor
                             </button>
+
+                            ${historySection}
                         </div>
                         `;
                     }).join('')
@@ -3101,8 +3236,12 @@ window.refreshMonitor = function() {
     let gridHtml = '';
 
     students.forEach(s => {
-        const session = dataState.examSessions?.find(ss => ss.examId == exam.id && ss.studentId == s.id);
-        const scoreRec = dataState.scores.find(sc => sc.taskId == exam.id && sc.studentId == s.id);
+        // ใช้ String() เพื่อป้องกัน type mismatch — หา session ล่าสุดก่อน (sort ด้วย lastUpdate)
+        const allSessions = (dataState.examSessions || [])
+            .filter(ss => String(ss.examId) === String(exam.id) && String(ss.studentId) === String(s.id))
+            .sort((a, b) => (b.lastUpdate || 0) - (a.lastUpdate || 0));
+        const session  = allSessions[0] || null;
+        const scoreRec = dataState.scores.find(sc => String(sc.taskId) === String(exam.id) && String(sc.studentId) === String(s.id));
         
         let statusCard = '';
         let statusBorder = 'border-white/5 bg-[#F5F0E8]';
@@ -3395,7 +3534,10 @@ export function renderHomeworkHistory() {
             actionBadge = `<span class="ml-2 bg-[#2D6A4F] text-white px-2 py-0.5 rounded-sm text-[10px] font-bold">ได้ ${item.score}/${item.maxScore}</span>`;
         }
 
-        const timeStr = window.formatThaiDate(item.timestamp) + ' ' + new Date(item.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.';
+        const itemTs = item.timestampISO || item.timestamp;
+        const timeStr = itemTs && !isNaN(new Date(itemTs).getTime())
+            ? formatThaiDate(itemTs) + ' ' + new Date(itemTs).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) + ' น.'
+            : 'ไม่ระบุเวลา';
 
         return `
         <div class="bg-white border border-gray-200 border-l-4 ${colorClass} p-3 rounded-sm shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-2 hover:shadow-md transition-all">
