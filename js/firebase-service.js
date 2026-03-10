@@ -7,7 +7,7 @@ import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/f
 import { FIREBASE_CONFIG, GOOGLE_SCRIPT_URL } from "./config.js";
 import { dataState, updateDataState, saveToLocalStorage, globalState, updateLocalState } from "./state.js";
 import { updateSyncUI, showToast, showLoading, hideLoading } from "./utils.js";
-import { refreshUI } from "./ui-render.js";
+import { refreshUI } from "./ui-render.js?v=4";
 
 const app = initializeApp(FIREBASE_CONFIG);
 const db = getFirestore(app);
