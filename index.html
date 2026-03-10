@@ -225,8 +225,25 @@
             <i class="fa-solid fa-cloud-arrow-up"></i> ประมวลผลและบันทึกรายชื่อ
         </button>
     </div>
+    <!-- รายชื่อนักเรียนจัดการได้ -->
+    <div class="bg-white p-5 rounded-sm border border-gray-200 mt-6 shadow-sm relative overflow-hidden">
+        <div class="absolute -right-4 -top-4 text-[60px] text-[#2D6A4F] opacity-5 font-serif-thai pointer-events-none">名</div>
+        <div class="flex items-center justify-between mb-4 border-b border-gray-200 pb-3 relative z-10">
+            <h4 class="text-[#1A1A2E] font-bold text-base font-serif-thai flex items-center gap-2">
+                <i class="fa-solid fa-users text-[#2D6A4F]"></i> รายชื่อนักเรียน
+            </h4>
+            <select id="student-list-class" onchange="window.renderStudentList(this.value)"
+                class="bg-[#F5F0E8] border border-gray-300 rounded-sm px-3 py-1.5 text-sm text-[#1A1A2E] outline-none focus:border-[#C53D43]">
+                <option value="">-- เลือกห้องเรียน --</option>
+            </select>
+        </div>
+        <div id="student-list-container" class="relative z-10 min-h-[60px] flex items-center justify-center text-xs text-gray-400">
+            เลือกห้องเรียนเพื่อดูรายชื่อ
+        </div>
+    </div>
+
                <div class="flex flex-col gap-6 mt-6">
-    
+
                     <div class="bg-white p-5 rounded-sm border border-gray-200 relative overflow-hidden h-fit shadow-sm">
                          <div class="absolute top-0 left-0 w-1 h-full bg-[#D4AF37]"></div>
                          <h4 class="text-sm font-bold text-[#1A1A2E] mb-4 uppercase tracking-wider flex items-center font-serif-thai">
@@ -1319,6 +1336,37 @@
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+
+<!-- Edit Student Modal -->
+<div id="edit-student-modal" class="fixed inset-0 bg-[#1A1A2E]/80 z-[60] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+    <div class="bg-white border border-gray-200 rounded-sm w-full max-w-sm p-6 shadow-md brush-border-top relative">
+        <div class="absolute -right-4 top-8 text-[80px] text-[#D4AF37] opacity-5 font-serif-thai pointer-events-none">改</div>
+        <h3 class="font-bold text-[#1A1A2E] mb-5 font-serif-thai border-b border-gray-200 pb-3 flex items-center gap-2">
+            <i class="fa-solid fa-pen text-[#D4AF37]"></i> แก้ไขข้อมูลนักเรียน
+        </h3>
+        <input type="hidden" id="edit-student-id">
+        <div class="space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="text-xs text-gray-600 font-bold block mb-1">เลขที่</label>
+                    <input id="edit-student-no" type="number" class="w-full bg-[#F5F0E8] border border-gray-300 rounded-sm px-3 py-2 text-sm outline-none focus:border-[#C53D43] text-center">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-600 font-bold block mb-1">รหัสนักเรียน</label>
+                    <input id="edit-student-code" class="w-full bg-[#F5F0E8] border border-gray-300 rounded-sm px-3 py-2 text-sm outline-none focus:border-[#C53D43]">
+                </div>
+            </div>
+            <div>
+                <label class="text-xs text-gray-600 font-bold block mb-1">ชื่อ-นามสกุล</label>
+                <input id="edit-student-name" class="w-full bg-[#F5F0E8] border border-gray-300 rounded-sm px-3 py-2 text-sm outline-none focus:border-[#C53D43] font-bold">
+            </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 mt-6">
+            <button onclick="document.getElementById('edit-student-modal').classList.add('hidden')" class="py-2.5 rounded-sm bg-gray-100 text-gray-600 border border-gray-300 font-bold text-sm hover:bg-gray-200 transition-colors">ยกเลิก</button>
+            <button onclick="window.saveStudentEdit()" class="py-2.5 rounded-sm bg-[#1A1A2E] text-white font-bold text-sm hover:bg-[#C53D43] shadow-sm transition-colors">บันทึก</button>
+        </div>
+    </div>
+</div>
 
 <div id="admin-password-modal" class="fixed inset-0 bg-[#1A1A2E]/80 z-[60] hidden flex items-center justify-center p-4 backdrop-blur-sm">
     <div class="bg-white border border-gray-200 rounded-sm w-full max-w-md overflow-hidden shadow-md transform transition-all brush-border-top relative">

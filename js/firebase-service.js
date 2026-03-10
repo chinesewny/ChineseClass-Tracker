@@ -13,7 +13,7 @@ const app = initializeApp(FIREBASE_CONFIG);
 const db = getFirestore(app);
 
 // 🟢 หมวดหมู่ปกติ (ตัด exams ออก เพราะเราจะใช้ระบบหั่นไฟล์ให้มันพิเศษ)
-const DB_KEYS = ["tasks", "scores", "students", "subjects", "classes", "attendance", "materials", "submissions", "returns", "schedules", "examSessions"];
+const DB_KEYS = ["tasks", "scores", "students", "subjects", "classes", "attendance", "materials", "submissions", "returns", "schedules", "examSessions", "settings"];
 
 // 🟢 ตั้งค่าจำนวนการหั่นไฟล์สำหรับ Exams
 const EXAM_CHUNKS = 10; 

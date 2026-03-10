@@ -1205,6 +1205,25 @@ export function renderStudentDashboard(studentCode) {
 export function refreshUI() {
     const keys = ["tasks", "scores", "students", "subjects", "classes", "attendance", "materials", "submissions", "returns", "schedules", "examSessions", "exams"];
     keys.forEach(k => { if (!dataState[k]) dataState[k] = []; });
+
+    // โหลดค่าตั้งค่าระบบกลับเข้าฟอร์ม
+    if (dataState.settings) {
+        const yearEl = document.getElementById('setting-academic-year');
+        const termEl = document.getElementById('setting-semester');
+        if (yearEl && dataState.settings.academicYear) yearEl.value = dataState.settings.academicYear;
+        if (termEl && dataState.settings.semester) termEl.value = dataState.settings.semester;
+    }
+
+    // อัปเดต dropdown กรองห้องเรียนในหน้าจัดการนักเรียน
+    const listClassEl = document.getElementById('student-list-class');
+    if (listClassEl) {
+        const prev = listClassEl.value;
+        listClassEl.innerHTML = '<option value="">-- เลือกห้องเรียน --</option>' +
+            dataState.classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        if (prev) listClassEl.value = prev;
+        if (listClassEl.value) window.renderStudentList(listClassEl.value);
+    }
+
     refreshDropdowns();
     renderSubjectList();
     renderScheduleList();
@@ -1245,6 +1264,52 @@ export function refreshUI() {
 }
 
 window.refreshUI = refreshUI;
+
+// ==========================================
+// 👥 ระบบจัดการรายชื่อนักเรียน
+// ==========================================
+window.renderStudentList = function(classId) {
+    const container = document.getElementById('student-list-container');
+    if (!container) return;
+    if (!classId) {
+        container.innerHTML = "<div class='text-xs text-gray-400 text-center py-6'>เลือกห้องเรียนเพื่อดูรายชื่อ</div>";
+        return;
+    }
+    const students = dataState.students.filter(s => s.classId == classId).sort((a, b) => Number(a.no) - Number(b.no));
+    if (students.length === 0) {
+        container.innerHTML = "<div class='text-xs text-gray-400 text-center py-6'>ยังไม่มีนักเรียนในห้องนี้</div>";
+        return;
+    }
+    container.innerHTML = `
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm border-collapse">
+                <thead>
+                    <tr class="bg-[#1A1A2E] text-white">
+                        <th class="px-3 py-2 text-center text-xs font-bold w-12">เลขที่</th>
+                        <th class="px-3 py-2 text-left text-xs font-bold w-28">รหัส</th>
+                        <th class="px-3 py-2 text-left text-xs font-bold">ชื่อ-นามสกุล</th>
+                        <th class="px-3 py-2 text-center text-xs font-bold w-24">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${students.map((s, i) => `
+                    <tr class="${i % 2 === 0 ? 'bg-white' : 'bg-[#F5F0E8]'} hover:bg-yellow-50 transition-colors border-b border-gray-100">
+                        <td class="px-3 py-2 text-center text-gray-600 font-bold">${s.no || '-'}</td>
+                        <td class="px-3 py-2 text-gray-500 font-mono text-xs">${s.code || '-'}</td>
+                        <td class="px-3 py-2 text-[#1A1A2E] font-bold font-serif-thai">${s.name}</td>
+                        <td class="px-3 py-2 text-center">
+                            <div class="flex justify-center gap-2">
+                                <button onclick="window.openEditStudentModal('${s.id}')" class="text-[#1A1A2E] hover:text-[#D4AF37] transition-colors" title="แก้ไข"><i class="fa-solid fa-pen text-xs"></i></button>
+                                <button onclick="window.deleteStudent('${s.id}', '${s.name}')" class="text-gray-400 hover:text-[#C53D43] transition-colors" title="ลบ"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                            </div>
+                        </td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>
+            <div class="text-right text-xs text-gray-400 mt-2 font-bold">รวม ${students.length} คน</div>
+        </div>`;
+};
+
 // ในไฟล์ js/ui-render.js
 
 
@@ -1265,6 +1330,23 @@ if (!globalState.lucky) {
         timeout: null,      // เวลาหยุดอัตโนมัติ
         currentPool: []     // รายชื่อนักเรียนที่จะสุ่มในรอบนี้
     };
+}
+
+function renderLuckyHistory() {
+    const container = document.getElementById('lucky-history-list');
+    if (!container) return;
+    const history = globalState.lucky.history || [];
+    if (history.length === 0) {
+        container.innerHTML = "<div class='text-xs text-gray-400 italic w-full text-center py-2'>ยังไม่มีประวัติการสุ่ม</div>";
+        return;
+    }
+    container.innerHTML = history.map((id, index) => {
+        const s = dataState.students.find(st => st.id === id);
+        if (!s) return '';
+        return `<div class="flex items-center gap-1 bg-[#1A1A2E] text-white text-xs px-2.5 py-1 rounded-sm font-bold font-serif-thai shadow-sm">
+            <span class="text-[#D4AF37] mr-0.5">${index + 1}.</span>${s.name}
+        </div>`;
+    }).join('');
 }
 
 export function setLuckyMode(mode) {
