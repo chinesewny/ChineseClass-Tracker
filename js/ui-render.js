@@ -1059,7 +1059,37 @@ export function renderStudentDashboard(studentCode) {
         const subjectMaterials = (dataState.materials || []).filter(m => String(m.subjectId) === String(subj.id) || m.subjectId === 'general' || !m.subjectId);
         let materialSectionHtml = '';
         if (subjectMaterials.length > 0) {
-            // โค้ดเรนเดอร์ Material ตรงนี้ (ใช้ของเดิมได้เลยครับ)
+            const matItems = subjectMaterials.map(m => {
+                const isEmbed = m.type === 'embed';
+                const icon = isEmbed ? 'fa-desktop' : 'fa-external-link-alt';
+                const badge = isEmbed
+                    ? '<span class="bg-[#1A1A2E] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-sm">EMBED</span>'
+                    : '<span class="bg-[#2D6A4F] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-sm">LINK</span>';
+                const clickAction = isEmbed
+                    ? `window.openMaterialViewer('${m.link}', '${m.title}')`
+                    : `window.open('${m.link}', '_blank')`;
+                const imgHtml = m.image
+                    ? `<img src="${m.image}" class="w-10 h-10 object-cover rounded-sm border border-gray-200 flex-shrink-0" onerror="this.style.display='none'">`
+                    : `<div class="w-10 h-10 bg-[#F5F0E8] border border-gray-200 rounded-sm flex items-center justify-center flex-shrink-0 text-[#1A1A2E] opacity-40"><i class="fa-solid fa-book-open"></i></div>`;
+                return `
+                <div onclick="${clickAction}" class="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-sm hover:border-[#C53D43] hover:shadow-sm transition-all cursor-pointer group">
+                    ${imgHtml}
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-bold text-[#1A1A2E] group-hover:text-[#C53D43] transition-colors truncate">${m.title}</div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        ${badge}
+                        <i class="fa-solid ${icon} text-gray-400 text-xs"></i>
+                    </div>
+                </div>`;
+            }).join('');
+            materialSectionHtml = `
+            <div class="bg-white rounded-sm p-0 md:p-2 relative z-10 mb-8">
+                <h3 class="text-sm font-bold text-[#1A1A2E] mb-4 flex items-center gap-2 font-serif-thai border-b border-gray-200 pb-2">
+                    <i class="fa-solid fa-book-open text-[#C53D43]"></i> เนื้อหาประกอบการเรียน
+                </h3>
+                <div class="flex flex-col gap-2">${matItems}</div>
+            </div>`;
         }
 
         const card = document.createElement('div');
@@ -1153,6 +1183,8 @@ export function renderStudentDashboard(studentCode) {
                  ${tasks.filter(t => t.category === 'accum').length === 0 ? '<div class="text-center text-gray-400 py-8 text-xs font-bold bg-[#F5F0E8] rounded-sm border border-dashed border-gray-300">ยังไม่มีงานในระบบ</div>' : ''}
             </div>
         </div>
+
+        ${materialSectionHtml}
 
         <div class="bg-[#F5F0E8] p-5 rounded-sm border border-gray-200 shadow-inner relative overflow-hidden">
             <h3 class="text-sm font-bold text-[#1A1A2E] mb-2 flex items-center gap-2 font-serif-thai border-b border-gray-300 pb-2">
