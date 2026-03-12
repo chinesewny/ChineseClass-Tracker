@@ -3550,7 +3550,9 @@ function updateVisualAttendance(studentId, status) {
     // 📊 อัปเดตตัวเลขสรุปยอด (ถ้ามี) ทันทีด้วย
     updateAttendanceStats(); 
 // 🟢 เพิ่มพารามิเตอร์ referenceElement และ position
-}export function addPassageDivider(data = null, referenceElement = null, position = 'after') {
+}
+
+export function addPassageDivider(data = null, referenceElement = null, position = 'after') {
     const container = document.getElementById('questions-container');
     if(!container) return;
 
