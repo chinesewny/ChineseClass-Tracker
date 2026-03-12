@@ -3225,9 +3225,12 @@ window.saveSystemSettings = async function() {
     const year = document.getElementById('setting-academic-year').value;
     const term = document.getElementById('setting-semester').value;
     
+    const hideScores = document.getElementById('setting-hide-scores')?.checked ?? false;
+
     if(!dataState.settings) dataState.settings = {};
     dataState.settings.academicYear = year;
     dataState.settings.semester = term;
+    dataState.settings.hideStudentScores = hideScores;
 
     if(typeof saveToLocalStorage === 'function') saveToLocalStorage();
     

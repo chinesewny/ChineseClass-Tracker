@@ -1092,9 +1092,12 @@ export function renderStudentDashboard(studentCode) {
             </div>`;
         }
 
+        const hideScores = !!(dataState.settings && dataState.settings.hideStudentScores);
+        const hiddenVal = `<span class="text-2xl font-bold text-gray-300 tracking-widest">- -</span>`;
+
         const card = document.createElement('div');
         card.className = "mb-10 animate-fade-in bg-white border border-gray-200 p-5 md:p-8 rounded-sm shadow-sm relative overflow-hidden brush-border-top";
-        
+
         // 📜 ดึง Timeline ของนักเรียนคนนี้มา
         const timelineHtml = generateTimelineHTML(s.id);
 
@@ -1111,26 +1114,35 @@ export function renderStudentDashboard(studentCode) {
             </div>
         </div>
 
+        ${hideScores ? `
+        <div class="flex items-center gap-3 mb-8 relative z-10 bg-[#FFF8E1] border border-[#D4AF37] rounded-sm px-5 py-3 shadow-sm">
+            <i class="fa-solid fa-eye-slash text-[#D4AF37] text-lg"></i>
+            <div>
+                <div class="text-sm font-bold text-[#1A1A2E]">คะแนนถูกปิดชั่วคราว</div>
+                <div class="text-xs text-gray-500">ครูยังไม่เปิดให้ดูผลการเรียนในขณะนี้</div>
+            </div>
+        </div>` : ''}
+
         <div class="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-8 relative z-10">
             <div class="bg-[#F5F0E8] border-t-4 border-t-[#D4AF37] border-b border-x border-gray-200 rounded-sm p-4 flex flex-col items-center justify-center shadow-sm">
                 <div class="text-xs text-gray-600 uppercase font-bold mb-1">คะแนนเก็บ</div>
-                <div class="text-3xl font-bold text-[#1A1A2E]">${accumTotal.toFixed(0)}</div>
+                <div class="text-3xl font-bold text-[#1A1A2E]">${hideScores ? hiddenVal : accumTotal.toFixed(0)}</div>
             </div>
-            <div class="${midtermColor} border-b border-x border-gray-200 rounded-sm p-4 flex flex-col items-center justify-center shadow-sm border-t-4">
-                <div class="text-xs text-gray-600 uppercase font-bold mb-1">${midtermLabel}</div>
-                <div class="text-3xl font-bold ${midtermText}">${midterm.toFixed(0)}</div>
+            <div class="${hideScores ? 'bg-[#F5F0E8] border-t-[#1A1A2E]' : midtermColor} border-b border-x border-gray-200 rounded-sm p-4 flex flex-col items-center justify-center shadow-sm border-t-4">
+                <div class="text-xs text-gray-600 uppercase font-bold mb-1">${hideScores ? 'กลางภาค' : midtermLabel}</div>
+                <div class="text-3xl font-bold ${hideScores ? 'text-[#1A1A2E]' : midtermText}">${hideScores ? hiddenVal : midterm.toFixed(0)}</div>
             </div>
             <div class="bg-[#F5F0E8] border-t-4 border-t-[#C53D43] border-b border-x border-gray-200 rounded-sm p-4 flex flex-col items-center justify-center shadow-sm">
                 <div class="text-xs text-gray-600 uppercase font-bold mb-1">ปลายภาค</div>
-                <div class="text-3xl font-bold text-[#1A1A2E]">${final.toFixed(0)}</div>
+                <div class="text-3xl font-bold text-[#1A1A2E]">${hideScores ? hiddenVal : final.toFixed(0)}</div>
             </div>
             <div class="bg-[#F5F0E8] border-t-4 border-t-[#2D6A4F] border-b border-x border-gray-200 rounded-sm p-4 flex flex-col items-center justify-center shadow-sm">
                 <div class="text-xs text-gray-600 uppercase font-bold mb-1">คะแนนรวม</div>
-                <div class="text-3xl font-bold text-[#2D6A4F]">${total.toFixed(0)}</div>
+                <div class="text-3xl font-bold text-[#2D6A4F]">${hideScores ? hiddenVal : total.toFixed(0)}</div>
             </div>
             <div class="col-span-2 md:col-span-1 bg-[#1A1A2E] border-2 border-[#D4AF37] rounded-sm p-4 flex flex-col items-center justify-center shadow-md relative overflow-hidden">
                 <div class="text-xs text-gray-300 uppercase font-bold mb-1 font-serif-thai tracking-widest">เกรดเฉลี่ย</div>
-                <div class="text-4xl font-extrabold text-[#D4AF37] relative z-10">${grade}</div>
+                <div class="text-4xl font-extrabold text-[#D4AF37] relative z-10">${hideScores ? '?' : grade}</div>
             </div>
         </div>
 
@@ -1151,7 +1163,9 @@ export function renderStudentDashboard(studentCode) {
                      let statusHtml = ''; let rowClass = 'border-l-4 border-transparent'; let iconColor = 'text-gray-300';
 
                      if (sc && sc.score !== null && sc.score !== undefined) {
-                         statusHtml = `<div class="text-right"><div class="text-[#2D6A4F] font-bold text-sm">${sc.score} <span class="text-[10px] text-gray-400">/${t.maxScore}</span></div><div class="text-[9px] text-[#2D6A4F] font-bold"><i class="fa-solid fa-check-circle"></i> ตรวจแล้ว</div></div>`;
+                         statusHtml = hideScores
+                             ? `<div class="text-right"><div class="text-[#2D6A4F] text-xs font-bold"><i class="fa-solid fa-check-circle"></i> ตรวจแล้ว</div></div>`
+                             : `<div class="text-right"><div class="text-[#2D6A4F] font-bold text-sm">${sc.score} <span class="text-[10px] text-gray-400">/${t.maxScore}</span></div><div class="text-[9px] text-[#2D6A4F] font-bold"><i class="fa-solid fa-check-circle"></i> ตรวจแล้ว</div></div>`;
                          rowClass = 'border-l-4 border-[#2D6A4F] bg-green-50/50'; iconColor = 'text-[#2D6A4F] bg-green-100';
                      } else if (lastSubmission && lastSubmission.status === 'returned') {
                          statusHtml = `<div class="text-right"><div class="text-[#C53D43] text-xs font-bold animate-pulse"><i class="fa-solid fa-rotate-left"></i> ให้แก้ไข!</div><div class="text-[10px] text-gray-600 font-bold max-w-[120px] truncate">คลิกดูเหตุผล</div></div>`;
@@ -1210,8 +1224,10 @@ export function refreshUI() {
     if (dataState.settings) {
         const yearEl = document.getElementById('setting-academic-year');
         const termEl = document.getElementById('setting-semester');
+        const hideEl = document.getElementById('setting-hide-scores');
         if (yearEl && dataState.settings.academicYear) yearEl.value = dataState.settings.academicYear;
         if (termEl && dataState.settings.semester) termEl.value = dataState.settings.semester;
+        if (hideEl) hideEl.checked = !!dataState.settings.hideStudentScores;
     }
 
     // อัปเดต dropdown กรองห้องเรียนในหน้าจัดการนักเรียน

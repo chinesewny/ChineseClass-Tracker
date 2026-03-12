@@ -194,6 +194,20 @@
                 </select>
             </div>
         </div>
+        <div class="mt-4 pt-4 border-t border-gray-300">
+            <label class="text-xs text-gray-600 ml-1 font-bold">การแสดงผลการเรียนสำหรับนักเรียน</label>
+            <label class="flex items-center gap-3 cursor-pointer mt-2 p-3 bg-white rounded-sm border border-gray-200 hover:border-[#C53D43] transition-all w-fit shadow-sm">
+                <div class="relative flex-shrink-0">
+                    <input type="checkbox" id="setting-hide-scores" class="sr-only peer">
+                    <div class="w-11 h-6 bg-gray-300 peer-checked:bg-[#C53D43] rounded-full transition-colors duration-200"></div>
+                    <div class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 peer-checked:translate-x-5"></div>
+                </div>
+                <div>
+                    <div class="text-sm font-bold text-[#1A1A2E]"><i class="fa-solid fa-eye-slash mr-1.5 text-[#C53D43]"></i>ปิดผลการเรียน (ซ่อนคะแนน)</div>
+                    <div class="text-xs text-gray-500 mt-0.5">เมื่อเปิด: นักเรียนจะไม่เห็นตัวเลขคะแนนทั้งหมดในแดชบอร์ด</div>
+                </div>
+            </label>
+        </div>
         <button onclick="window.saveSystemSettings()" class="mt-4 bg-[#1A1A2E] hover:bg-[#C53D43] text-white px-6 py-2.5 rounded-sm text-sm font-bold shadow-sm transition-colors flex items-center gap-2">
             <i class="fa-solid fa-save"></i> บันทึกการตั้งค่า
         </button>
