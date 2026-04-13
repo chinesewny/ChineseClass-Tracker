@@ -1,8 +1,8 @@
 // js/state.js
-export let dataState = { 
-    subjects:[], classes:[], students:[], tasks:[], scores:[], 
+export let dataState = {
+    subjects:[], classes:[], students:[], tasks:[], scores:[],
     attendance:[], materials:[], submissions:[], returns:[], schedules:[],
-    exams: [], examSessions: []
+    exams: [], examSessions: [], settings: {}
 };
 
 export const globalState = {
@@ -38,6 +38,9 @@ export function updateLocalState(p) {
     if(p.action === 'submitTask') { p.studentIds.forEach(sid => { dataState.submissions = dataState.submissions.filter(s => !(s.studentId == sid && s.taskId == p.taskId)); if(dataState.returns) dataState.returns = dataState.returns.filter(r => !(r.studentId == sid && r.taskId == p.taskId)); dataState.submissions.push({taskId:p.taskId, studentId:sid, link:p.link, timestampISO: new Date().toISOString(), comment: p.comment}); }); }
     // ใน js/state.js ฟังก์ชัน updateLocalState
 
+    if(p.action === 'updateSettings') { if(!dataState.settings) dataState.settings = {}; Object.assign(dataState.settings, p.settings); }
+    if(p.action === 'deleteStudent') { dataState.students = dataState.students.filter(s => s.id !== p.id); }
+    if(p.action === 'updateStudent') { const s = dataState.students.find(x => x.id == p.id); if(s) { s.no = p.no; s.code = p.code; s.name = p.name; } }
     if(p.action === 'editTaskDetails') {
         const t = dataState.tasks.find(x => String(x.id) === String(p.id));
         if(t) {

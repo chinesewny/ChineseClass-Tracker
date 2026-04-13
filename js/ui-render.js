@@ -1092,9 +1092,12 @@ export function renderStudentDashboard(studentCode) {
             </div>`;
         }
 
+        const hideScores = !!(dataState.settings && dataState.settings.hideStudentScores);
+        const hiddenVal = `<span class="text-2xl font-bold text-gray-300 tracking-widest">- -</span>`;
+
         const card = document.createElement('div');
         card.className = "mb-10 animate-fade-in bg-white border border-gray-200 p-5 md:p-8 rounded-sm shadow-sm relative overflow-hidden brush-border-top";
-        
+
         // 📜 ดึง Timeline ของนักเรียนคนนี้มา
         const timelineHtml = generateTimelineHTML(s.id);
 
@@ -1111,26 +1114,35 @@ export function renderStudentDashboard(studentCode) {
             </div>
         </div>
 
+        ${hideScores ? `
+        <div class="flex items-center gap-3 mb-8 relative z-10 bg-[#FFF8E1] border border-[#D4AF37] rounded-sm px-5 py-3 shadow-sm">
+            <i class="fa-solid fa-eye-slash text-[#D4AF37] text-lg"></i>
+            <div>
+                <div class="text-sm font-bold text-[#1A1A2E]">คะแนนถูกปิดชั่วคราว</div>
+                <div class="text-xs text-gray-500">ครูยังไม่เปิดให้ดูผลการเรียนในขณะนี้</div>
+            </div>
+        </div>` : ''}
+
         <div class="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 mb-8 relative z-10">
             <div class="bg-[#F5F0E8] border-t-4 border-t-[#D4AF37] border-b border-x border-gray-200 rounded-sm p-4 flex flex-col items-center justify-center shadow-sm">
                 <div class="text-xs text-gray-600 uppercase font-bold mb-1">คะแนนเก็บ</div>
-                <div class="text-3xl font-bold text-[#1A1A2E]">${accumTotal.toFixed(0)}</div>
+                <div class="text-3xl font-bold text-[#1A1A2E]">${hideScores ? hiddenVal : accumTotal.toFixed(0)}</div>
             </div>
-            <div class="${midtermColor} border-b border-x border-gray-200 rounded-sm p-4 flex flex-col items-center justify-center shadow-sm border-t-4">
-                <div class="text-xs text-gray-600 uppercase font-bold mb-1">${midtermLabel}</div>
-                <div class="text-3xl font-bold ${midtermText}">${midterm.toFixed(0)}</div>
+            <div class="${hideScores ? 'bg-[#F5F0E8] border-t-[#1A1A2E]' : midtermColor} border-b border-x border-gray-200 rounded-sm p-4 flex flex-col items-center justify-center shadow-sm border-t-4">
+                <div class="text-xs text-gray-600 uppercase font-bold mb-1">${hideScores ? 'กลางภาค' : midtermLabel}</div>
+                <div class="text-3xl font-bold ${hideScores ? 'text-[#1A1A2E]' : midtermText}">${hideScores ? hiddenVal : midterm.toFixed(0)}</div>
             </div>
             <div class="bg-[#F5F0E8] border-t-4 border-t-[#C53D43] border-b border-x border-gray-200 rounded-sm p-4 flex flex-col items-center justify-center shadow-sm">
                 <div class="text-xs text-gray-600 uppercase font-bold mb-1">ปลายภาค</div>
-                <div class="text-3xl font-bold text-[#1A1A2E]">${final.toFixed(0)}</div>
+                <div class="text-3xl font-bold text-[#1A1A2E]">${hideScores ? hiddenVal : final.toFixed(0)}</div>
             </div>
             <div class="bg-[#F5F0E8] border-t-4 border-t-[#2D6A4F] border-b border-x border-gray-200 rounded-sm p-4 flex flex-col items-center justify-center shadow-sm">
                 <div class="text-xs text-gray-600 uppercase font-bold mb-1">คะแนนรวม</div>
-                <div class="text-3xl font-bold text-[#2D6A4F]">${total.toFixed(0)}</div>
+                <div class="text-3xl font-bold text-[#2D6A4F]">${hideScores ? hiddenVal : total.toFixed(0)}</div>
             </div>
             <div class="col-span-2 md:col-span-1 bg-[#1A1A2E] border-2 border-[#D4AF37] rounded-sm p-4 flex flex-col items-center justify-center shadow-md relative overflow-hidden">
                 <div class="text-xs text-gray-300 uppercase font-bold mb-1 font-serif-thai tracking-widest">เกรดเฉลี่ย</div>
-                <div class="text-4xl font-extrabold text-[#D4AF37] relative z-10">${grade}</div>
+                <div class="text-4xl font-extrabold text-[#D4AF37] relative z-10">${hideScores ? '?' : grade}</div>
             </div>
         </div>
 
@@ -1151,7 +1163,9 @@ export function renderStudentDashboard(studentCode) {
                      let statusHtml = ''; let rowClass = 'border-l-4 border-transparent'; let iconColor = 'text-gray-300';
 
                      if (sc && sc.score !== null && sc.score !== undefined) {
-                         statusHtml = `<div class="text-right"><div class="text-[#2D6A4F] font-bold text-sm">${sc.score} <span class="text-[10px] text-gray-400">/${t.maxScore}</span></div><div class="text-[9px] text-[#2D6A4F] font-bold"><i class="fa-solid fa-check-circle"></i> ตรวจแล้ว</div></div>`;
+                         statusHtml = hideScores
+                             ? `<div class="text-right"><div class="text-[#2D6A4F] text-xs font-bold"><i class="fa-solid fa-check-circle"></i> ตรวจแล้ว</div></div>`
+                             : `<div class="text-right"><div class="text-[#2D6A4F] font-bold text-sm">${sc.score} <span class="text-[10px] text-gray-400">/${t.maxScore}</span></div><div class="text-[9px] text-[#2D6A4F] font-bold"><i class="fa-solid fa-check-circle"></i> ตรวจแล้ว</div></div>`;
                          rowClass = 'border-l-4 border-[#2D6A4F] bg-green-50/50'; iconColor = 'text-[#2D6A4F] bg-green-100';
                      } else if (lastSubmission && lastSubmission.status === 'returned') {
                          statusHtml = `<div class="text-right"><div class="text-[#C53D43] text-xs font-bold animate-pulse"><i class="fa-solid fa-rotate-left"></i> ให้แก้ไข!</div><div class="text-[10px] text-gray-600 font-bold max-w-[120px] truncate">คลิกดูเหตุผล</div></div>`;
@@ -1205,6 +1219,27 @@ export function renderStudentDashboard(studentCode) {
 export function refreshUI() {
     const keys = ["tasks", "scores", "students", "subjects", "classes", "attendance", "materials", "submissions", "returns", "schedules", "examSessions", "exams"];
     keys.forEach(k => { if (!dataState[k]) dataState[k] = []; });
+
+    // โหลดค่าตั้งค่าระบบกลับเข้าฟอร์ม
+    if (dataState.settings) {
+        const yearEl = document.getElementById('setting-academic-year');
+        const termEl = document.getElementById('setting-semester');
+        const hideEl = document.getElementById('setting-hide-scores');
+        if (yearEl && dataState.settings.academicYear) yearEl.value = dataState.settings.academicYear;
+        if (termEl && dataState.settings.semester) termEl.value = dataState.settings.semester;
+        if (hideEl) hideEl.checked = !!dataState.settings.hideStudentScores;
+    }
+
+    // อัปเดต dropdown กรองห้องเรียนในหน้าจัดการนักเรียน
+    const listClassEl = document.getElementById('student-list-class');
+    if (listClassEl) {
+        const prev = listClassEl.value;
+        listClassEl.innerHTML = '<option value="">-- เลือกห้องเรียน --</option>' +
+            dataState.classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        if (prev) listClassEl.value = prev;
+        if (listClassEl.value) window.renderStudentList(listClassEl.value);
+    }
+
     refreshDropdowns();
     renderSubjectList();
     renderScheduleList();
@@ -1245,6 +1280,52 @@ export function refreshUI() {
 }
 
 window.refreshUI = refreshUI;
+
+// ==========================================
+// 👥 ระบบจัดการรายชื่อนักเรียน
+// ==========================================
+window.renderStudentList = function(classId) {
+    const container = document.getElementById('student-list-container');
+    if (!container) return;
+    if (!classId) {
+        container.innerHTML = "<div class='text-xs text-gray-400 text-center py-6'>เลือกห้องเรียนเพื่อดูรายชื่อ</div>";
+        return;
+    }
+    const students = dataState.students.filter(s => s.classId == classId).sort((a, b) => Number(a.no) - Number(b.no));
+    if (students.length === 0) {
+        container.innerHTML = "<div class='text-xs text-gray-400 text-center py-6'>ยังไม่มีนักเรียนในห้องนี้</div>";
+        return;
+    }
+    container.innerHTML = `
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm border-collapse">
+                <thead>
+                    <tr class="bg-[#1A1A2E] text-white">
+                        <th class="px-3 py-2 text-center text-xs font-bold w-12">เลขที่</th>
+                        <th class="px-3 py-2 text-left text-xs font-bold w-28">รหัส</th>
+                        <th class="px-3 py-2 text-left text-xs font-bold">ชื่อ-นามสกุล</th>
+                        <th class="px-3 py-2 text-center text-xs font-bold w-24">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${students.map((s, i) => `
+                    <tr class="${i % 2 === 0 ? 'bg-white' : 'bg-[#F5F0E8]'} hover:bg-yellow-50 transition-colors border-b border-gray-100">
+                        <td class="px-3 py-2 text-center text-gray-600 font-bold">${s.no || '-'}</td>
+                        <td class="px-3 py-2 text-gray-500 font-mono text-xs">${s.code || '-'}</td>
+                        <td class="px-3 py-2 text-[#1A1A2E] font-bold font-serif-thai">${s.name}</td>
+                        <td class="px-3 py-2 text-center">
+                            <div class="flex justify-center gap-2">
+                                <button onclick="window.openEditStudentModal('${s.id}')" class="text-[#1A1A2E] hover:text-[#D4AF37] transition-colors" title="แก้ไข"><i class="fa-solid fa-pen text-xs"></i></button>
+                                <button onclick="window.deleteStudent('${s.id}', '${s.name}')" class="text-gray-400 hover:text-[#C53D43] transition-colors" title="ลบ"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                            </div>
+                        </td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>
+            <div class="text-right text-xs text-gray-400 mt-2 font-bold">รวม ${students.length} คน</div>
+        </div>`;
+};
+
 // ในไฟล์ js/ui-render.js
 
 
@@ -1265,6 +1346,23 @@ if (!globalState.lucky) {
         timeout: null,      // เวลาหยุดอัตโนมัติ
         currentPool: []     // รายชื่อนักเรียนที่จะสุ่มในรอบนี้
     };
+}
+
+function renderLuckyHistory() {
+    const container = document.getElementById('lucky-history-list');
+    if (!container) return;
+    const history = globalState.lucky.history || [];
+    if (history.length === 0) {
+        container.innerHTML = "<div class='text-xs text-gray-400 italic w-full text-center py-2'>ยังไม่มีประวัติการสุ่ม</div>";
+        return;
+    }
+    container.innerHTML = history.map((id, index) => {
+        const s = dataState.students.find(st => st.id === id);
+        if (!s) return '';
+        return `<div class="flex items-center gap-1 bg-[#1A1A2E] text-white text-xs px-2.5 py-1 rounded-sm font-bold font-serif-thai shadow-sm">
+            <span class="text-[#D4AF37] mr-0.5">${index + 1}.</span>${s.name}
+        </div>`;
+    }).join('');
 }
 
 export function setLuckyMode(mode) {
@@ -3452,7 +3550,9 @@ function updateVisualAttendance(studentId, status) {
     // 📊 อัปเดตตัวเลขสรุปยอด (ถ้ามี) ทันทีด้วย
     updateAttendanceStats(); 
 // 🟢 เพิ่มพารามิเตอร์ referenceElement และ position
-}export function addPassageDivider(data = null, referenceElement = null, position = 'after') {
+}
+
+export function addPassageDivider(data = null, referenceElement = null, position = 'after') {
     const container = document.getElementById('questions-container');
     if(!container) return;
 

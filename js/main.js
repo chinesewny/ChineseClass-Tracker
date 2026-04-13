@@ -3225,9 +3225,12 @@ window.saveSystemSettings = async function() {
     const year = document.getElementById('setting-academic-year').value;
     const term = document.getElementById('setting-semester').value;
     
+    const hideScores = document.getElementById('setting-hide-scores')?.checked ?? false;
+
     if(!dataState.settings) dataState.settings = {};
     dataState.settings.academicYear = year;
     dataState.settings.semester = term;
+    dataState.settings.hideStudentScores = hideScores;
 
     if(typeof saveToLocalStorage === 'function') saveToLocalStorage();
     
@@ -3237,6 +3240,40 @@ window.saveSystemSettings = async function() {
     
     if(typeof Swal !== 'undefined') Swal.fire('สำเร็จ', 'บันทึกการตั้งค่าระบบเรียบร้อย', 'success');
     else alert("บันทึกการตั้งค่าระบบเรียบร้อย");
+};
+
+// ==========================================
+// 👥 ระบบจัดการนักเรียน (แก้ไข / ลบ)
+// ==========================================
+window.deleteStudent = async function(id, name) {
+    if (!confirm(`ต้องการลบนักเรียน "${name}" ออกจากระบบใช่หรือไม่?\n\n⚠️ ข้อมูลคะแนนและการส่งงานที่ผูกกับนักเรียนคนนี้จะยังคงอยู่ในระบบ`)) return;
+    await saveAndRefresh({ action: 'deleteStudent', id });
+    const classEl = document.getElementById('student-list-class');
+    if (classEl && classEl.value) window.renderStudentList(classEl.value);
+    showToast(`ลบ "${name}" เรียบร้อย`, 'success');
+};
+
+window.openEditStudentModal = function(id) {
+    const s = dataState.students.find(x => x.id == id);
+    if (!s) return;
+    document.getElementById('edit-student-id').value = s.id;
+    document.getElementById('edit-student-no').value = s.no || '';
+    document.getElementById('edit-student-code').value = s.code || '';
+    document.getElementById('edit-student-name').value = s.name || '';
+    document.getElementById('edit-student-modal').classList.remove('hidden');
+};
+
+window.saveStudentEdit = async function() {
+    const id = document.getElementById('edit-student-id').value;
+    const no = document.getElementById('edit-student-no').value.trim();
+    const code = document.getElementById('edit-student-code').value.trim();
+    const name = document.getElementById('edit-student-name').value.trim();
+    if (!name) return alert('กรุณากรอกชื่อ-นามสกุล');
+    document.getElementById('edit-student-modal').classList.add('hidden');
+    await saveAndRefresh({ action: 'updateStudent', id, no, code, name });
+    const classEl = document.getElementById('student-list-class');
+    if (classEl && classEl.value) window.renderStudentList(classEl.value);
+    showToast('บันทึกข้อมูลนักเรียนเรียบร้อย', 'success');
 };
 
 // ==========================================
