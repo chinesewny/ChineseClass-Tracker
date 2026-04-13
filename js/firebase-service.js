@@ -1,6 +1,18 @@
 // js/firebase-service.js
-let saveTimeout; 
+let saveTimeout;
 let syncTimeout;
+
+// Fetch with 30-second timeout to prevent indefinite hanging on slow/unreachable network
+async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        return response;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
@@ -16,8 +28,16 @@ const db = getFirestore(app);
 const DB_KEYS = ["tasks", "scores", "students", "subjects", "classes", "attendance", "materials", "submissions", "returns", "schedules", "examSessions", "settings"];
 
 // 🟢 ตั้งค่าจำนวนการหั่นไฟล์สำหรับ Exams
-const EXAM_CHUNKS = 10; 
+const EXAM_CHUNKS = 10;
 let examsDataArray = new Array(EXAM_CHUNKS).fill([]); // อาเรย์สำหรับพักข้อมูลที่หั่นแล้ว
+
+// Store unsubscribe functions so we can clean up listeners before re-subscribing
+let _unsubscribers = [];
+
+function cleanupListeners() {
+    _unsubscribers.forEach(unsub => { try { unsub(); } catch(_) {} });
+    _unsubscribers = [];
+}
 
 export async function syncData() {
     //if (globalState.sheetQueue && globalState.sheetQueue.length > 0) {
@@ -25,25 +45,29 @@ export async function syncData() {
        // return;
    // }
 
+    // ล้าง listener เก่าก่อนเริ่มฟังใหม่ (ป้องกัน duplicate listeners)
+    cleanupListeners();
+
     updateSyncUI('Connecting (Firestore)...', 'yellow');
 
     // 1. โหลดข้อมูลหมวดหมู่ปกติ
     DB_KEYS.forEach(key => {
         const docRef = doc(db, "school_data", `wany_data_${key}`);
-        onSnapshot(docRef, { includeMetadataChanges: true }, (docSnap) => {
+        const unsub = onSnapshot(docRef, { includeMetadataChanges: true }, (docSnap) => {
             if (docSnap.metadata.hasPendingWrites) return;
             if (docSnap.exists()) dataState[key] = docSnap.data().items || [];
             else dataState[key] = [];
             triggerUIRefresh();
         });
+        _unsubscribers.push(unsub);
     });
 
     // 2. โหลดข้อมูล Exams (ดึงจาก 10 ไฟล์ย่อยมาประกอบร่างกัน)
     for (let i = 0; i < EXAM_CHUNKS; i++) {
         const docRef = doc(db, "school_data", `wany_data_exams_part_${i}`);
-        onSnapshot(docRef, { includeMetadataChanges: true }, (docSnap) => {
+        const unsub = onSnapshot(docRef, { includeMetadataChanges: true }, (docSnap) => {
             if (docSnap.metadata.hasPendingWrites) return;
-            
+
             if (docSnap.exists()) {
                 examsDataArray[i] = docSnap.data().items || [];
             } else {
@@ -53,6 +77,7 @@ export async function syncData() {
             dataState.exams = examsDataArray.flat();
             triggerUIRefresh();
         });
+        _unsubscribers.push(unsub);
     }
 }
 
@@ -119,7 +144,7 @@ export async function backupToGoogleSheet() {
     showLoading("กำลังส่งข้อมูลไป Google Sheet...");
     try {
         const payload = { action: "exportData", data: dataState };
-        const response = await fetch(GOOGLE_SCRIPT_URL, {
+        const response = await fetchWithTimeout(GOOGLE_SCRIPT_URL, {
             method: "POST",
             body: JSON.stringify(payload)
         });
@@ -138,7 +163,7 @@ export async function restoreFromGoogleSheet() {
     showLoading("กำลังดึงข้อมูล...");
     try {
         const payload = { action: "importData" };
-        const response = await fetch(GOOGLE_SCRIPT_URL, {
+        const response = await fetchWithTimeout(GOOGLE_SCRIPT_URL, {
             method: "POST",
             body: JSON.stringify(payload)
         });
