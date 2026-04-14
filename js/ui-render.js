@@ -397,7 +397,7 @@ export function renderGradeReport() {
     </div>`;
 
     const sel = document.getElementById('report-class-select');
-    dataState.classes.forEach(c => {
+    getActiveClasses().forEach(c => {
         const opt = document.createElement('option');
         opt.value = c.id;
         opt.textContent = c.name;
@@ -642,7 +642,7 @@ export function renderExamPanel(containerId = null) {
                     <label class="text-xs text-gray-600 mb-2 block font-bold">เลือกห้องเรียน เพื่อจัดการตารางคะแนน</label>
                     <select id="exam-class-select-main" onchange="renderExamPanel()" class="w-full bg-[#F5F0E8] border border-gray-300 rounded-sm px-4 py-2.5 text-[#1A1A2E] font-bold focus:outline-none focus:border-[#C53D43] transition-colors cursor-pointer">
                         <option value="">-- กรุณาเลือกห้องเรียน --</option>
-                        ${dataState.classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+                        ${getActiveClasses().map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
                     </select>
                 </div>
 
@@ -1016,13 +1016,24 @@ window.generateTimelineHTML = generateTimelineHTML; // ผูกไว้ให�
 
 // --- 3. Render Functions (Student Dashboard) ---
 export function renderStudentDashboard(studentCode) {
-    const studentRecords = dataState.students.filter(s => String(s.code) === String(studentCode));
+    // ค้นหานักเรียนทุก record ที่มีรหัสนี้ (อาจซ้ำข้ามภาคเรียน)
+    let studentRecords = dataState.students.filter(s => String(s.code) === String(studentCode));
     if (studentRecords.length === 0) return;
-    
+
+    // ถ้ามีหลาย record (นักเรียนถูก Promote) ให้เลือกเฉพาะภาคเรียน active
+    const activeKey = dataState.settings && dataState.settings.activeYearKey;
+    if (studentRecords.length > 1 && activeKey) {
+        const activeClassIds = new Set(
+            dataState.classes.filter(c => !c.yearKey || c.yearKey === activeKey).map(c => String(c.id))
+        );
+        const activeRecs = studentRecords.filter(s => activeClassIds.has(String(s.classId)));
+        if (activeRecs.length > 0) studentRecords = activeRecs;
+    }
+
     const mainProfile = studentRecords[0];
 
     const nameEl = document.getElementById('std-dash-name'); if(nameEl) nameEl.textContent = mainProfile.name;
-    const classEl = document.getElementById('std-dash-class'); 
+    const classEl = document.getElementById('std-dash-class');
     if(classEl) classEl.textContent = [...new Set(studentRecords.map(s => dataState.classes.find(c => c.id == s.classId)?.name))].filter(Boolean).join(', ');
 
     const container = document.getElementById('std-subjects-container'); 
@@ -1847,9 +1858,9 @@ export function renderScoreManagerPanel() {
         </div>
     </div>`;
 
-    // Populate Dropdown
+    // Populate Dropdown (เฉพาะห้องของภาคเรียน active)
     const sel = document.getElementById('score-mgr-class-select');
-    dataState.classes.forEach(c => {
+    getActiveClasses().forEach(c => {
         const opt = document.createElement('option');
         opt.value = c.id;
         opt.textContent = c.name;

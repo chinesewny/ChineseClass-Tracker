@@ -178,12 +178,24 @@ window.handleStudentLogin = async function() {
         }
 
         // 4. ค้นหารายชื่อแบบยืดหยุ่น (ตัดช่องว่าง + พิมพ์เล็ก)
-        const student = dataState.students.find(s => {
+        // ถ้ามีนักเรียนรหัสเดียวกันหลายปี (Promote) → เลือกคนที่อยู่ในภาคเรียน active
+        const allMatches = dataState.students.filter(s => {
             if (!s.code) return false;
             const dbCode = String(s.code).replace(/\s+/g, '').toLowerCase();
             const dbId   = String(s.id).replace(/\s+/g, '').toLowerCase();
             return dbCode === inputId || dbId === inputId;
         });
+        let student = allMatches[0] || null;
+        if (allMatches.length > 1) {
+            const activeKey = dataState.settings && dataState.settings.activeYearKey;
+            if (activeKey) {
+                const activeClassIds = new Set(
+                    dataState.classes.filter(c => !c.yearKey || c.yearKey === activeKey).map(c => String(c.id))
+                );
+                const activeMatch = allMatches.find(s => activeClassIds.has(String(s.classId)));
+                if (activeMatch) student = activeMatch;
+            }
+        }
 
         // 5. แสดงผล
         if (student) {
@@ -1035,9 +1047,13 @@ function initEventListeners() {
              document.getElementById('report-table-body').innerHTML = ''; 
              
              if(!subId) return; 
-             dataState.classes.filter(c => c.subjectId == subId).forEach(c => { 
-                const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; classSelect.appendChild(o); 
-             }); 
+             const activeKey = dataState.settings && dataState.settings.activeYearKey;
+             const filteredClasses = activeKey
+                 ? dataState.classes.filter(c => c.subjectId == subId && (!c.yearKey || c.yearKey === activeKey))
+                 : dataState.classes.filter(c => c.subjectId == subId);
+             filteredClasses.forEach(c => {
+                const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; classSelect.appendChild(o);
+             });
         };
     }
 
