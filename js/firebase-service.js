@@ -19,7 +19,8 @@ import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/f
 import { FIREBASE_CONFIG, GOOGLE_SCRIPT_URL } from "./config.js";
 import { dataState, updateDataState, saveToLocalStorage, globalState, updateLocalState, saveSettingsPersistent } from "./state.js";
 import { updateSyncUI, showToast, showLoading, hideLoading } from "./utils.js";
-import { refreshUI } from "./ui-render.js?v=4";
+// refreshUI is injected by each page via window.refreshUI
+// (decoupled so multiple HTML pages can share this service)
 
 const app = initializeApp(FIREBASE_CONFIG);
 const db = getFirestore(app);
@@ -87,7 +88,7 @@ function triggerUIRefresh() {
     syncTimeout = setTimeout(() => {
         saveToLocalStorage();
         saveSettingsPersistent(); // บันทึก settings แยกต่างหาก (ไม่มีหมดอายุ)
-        refreshUI();
+        if (typeof window.refreshUI === 'function') window.refreshUI();
         updateSyncUI('Online (Firestore)', 'green');
     }, 300);
 }
@@ -95,9 +96,9 @@ function triggerUIRefresh() {
 export async function saveAndRefresh(payload = null) {
     if (payload) {
         try {
-            updateLocalState(payload); 
+            updateLocalState(payload);
             saveToLocalStorage();
-            refreshUI();               
+            if (typeof window.refreshUI === 'function') window.refreshUI();
         } catch (e) {
             console.error("Local Update Error:", e);
         }

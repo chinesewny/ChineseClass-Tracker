@@ -35,6 +35,7 @@ import { PERIODS } from "./config.js";
 window.renderStudentDashboard = renderStudentDashboard;
 window.saveAndRefresh = saveAndRefresh;
 window.openEditColumnModal = openEditColumnModal;
+window.refreshUI = refreshUI; // expose for firebase-service (shared across pages)
 // 🛠 1. ฟังก์ชันสลับแท็บ (Tab Switching)
 // ในไฟล์ js/main.js
 
