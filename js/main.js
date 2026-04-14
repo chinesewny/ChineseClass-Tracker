@@ -1082,7 +1082,7 @@ function initEventListeners() {
 
     // 13. จัดการข้อมูล
     const fSub = document.getElementById('form-subject'); if(fSub) fSub.onsubmit = (e) => { e.preventDefault(); saveAndRefresh({ action:'addSubject', id:Date.now(), name:document.getElementById('subject-name').value }); e.target.reset(); };
-    const fCls = document.getElementById('form-class'); if(fCls) fCls.onsubmit = (e) => { e.preventDefault(); saveAndRefresh({ action:'addClass', id:Date.now(), name:document.getElementById('class-name').value, subjectId:document.getElementById('class-subject-ref').value }); e.target.reset(); };
+    const fCls = document.getElementById('form-class'); if(fCls) fCls.onsubmit = (e) => { e.preventDefault(); saveAndRefresh({ action:'addClass', id:Date.now(), name:document.getElementById('class-name').value, subjectId:document.getElementById('class-subject-ref').value, yearKey: (dataState.settings && dataState.settings.activeYearKey) || null }); e.target.reset(); };
     const fStd = document.getElementById('form-student'); if(fStd) fStd.onsubmit = (e) => { e.preventDefault(); saveAndRefresh({ action: 'addStudent', id: Date.now(), classId: document.getElementById('student-class').value, no: document.getElementById('student-no').value, code: document.getElementById('student-id').value, name: document.getElementById('student-name').value }); e.target.reset(); };
     
     // 14. บันทึก Modal (กดปุ่ม)
@@ -3221,25 +3221,246 @@ window.removeTaskImageAccum = function() {
 // ==========================================
 // ⚙️ การตั้งค่าระบบการศึกษาพื้นฐาน
 // ==========================================
+
+// ฟังก์ชันช่วยแปลง yearKey เป็นข้อความภาษาไทย
+function formatYearKey(key) {
+    if (!key) return '—';
+    const [year, sem] = key.split('-');
+    const semLabel = { '1': 'ภาคเรียนที่ 1', '2': 'ภาคเรียนที่ 2', '3': 'ภาคเรียนฤดูร้อน' }[sem] || `เทอม ${sem}`;
+    return `${semLabel} / ปี ${year}`;
+}
+
 window.saveSystemSettings = async function() {
-    const year = document.getElementById('setting-academic-year').value;
+    const year = (document.getElementById('setting-academic-year').value || '').trim();
     const term = document.getElementById('setting-semester').value;
-    
     const hideScores = document.getElementById('setting-hide-scores')?.checked ?? false;
 
-    if(!dataState.settings) dataState.settings = {};
+    if (!year) return alert('กรุณากรอกปีการศึกษา');
+
+    const newYearKey = `${year}-${term}`;
+    const oldYearKey = dataState.settings && dataState.settings.activeYearKey;
+
+    if (!dataState.settings) dataState.settings = {};
+
+    // ถ้ากำลังเปลี่ยนภาคเรียน → เปิด Wizard ให้เลือกว่าจะทำอะไร
+    if (oldYearKey && oldYearKey !== newYearKey) {
+        // เก็บค่า pending ไว้ให้ wizard ใช้
+        dataState.settings._pendingYear = year;
+        dataState.settings._pendingTerm = term;
+        dataState.settings._pendingHideScores = hideScores;
+        dataState.settings._pendingYearKey = newYearKey;
+
+        // อัพเดทข้อความใน modal
+        const oldEl = document.getElementById('new-sem-old-key');
+        const newEl = document.getElementById('new-sem-new-key');
+        if (oldEl) oldEl.textContent = formatYearKey(oldYearKey);
+        if (newEl) newEl.textContent = formatYearKey(newYearKey);
+
+        document.getElementById('new-semester-modal').classList.remove('hidden');
+        return; // รอให้ผู้ใช้เลือกใน wizard
+    }
+
+    // ตั้งค่าครั้งแรก หรือไม่มีการเปลี่ยน
     dataState.settings.academicYear = year;
     dataState.settings.semester = term;
+    dataState.settings.activeYearKey = newYearKey;
     dataState.settings.hideStudentScores = hideScores;
 
-    if(typeof saveToLocalStorage === 'function') saveToLocalStorage();
-    
-    if(typeof saveAndRefresh === 'function') {
-        await saveAndRefresh({ action: 'updateSettings', settings: dataState.settings });
+    await saveAndRefresh({ action: 'updateSettings', settings: dataState.settings });
+    showToast('บันทึกการตั้งค่าเรียบร้อย', 'success');
+};
+
+// ปิด wizard โดยไม่บันทึก (กลับสู่ภาคเรียนเดิม)
+window.closeNewSemesterModal = function() {
+    document.getElementById('new-semester-modal').classList.add('hidden');
+    // คืนค่าฟอร์มให้ตรงกับ activeYearKey เดิม
+    const s = dataState.settings;
+    if (s && s.activeYearKey) {
+        const [y, t] = s.activeYearKey.split('-');
+        const yearEl = document.getElementById('setting-academic-year');
+        const termEl = document.getElementById('setting-semester');
+        if (yearEl) yearEl.value = y;
+        if (termEl) termEl.value = t;
     }
-    
-    if(typeof Swal !== 'undefined') Swal.fire('สำเร็จ', 'บันทึกการตั้งค่าระบบเรียบร้อย', 'success');
-    else alert("บันทึกการตั้งค่าระบบเรียบร้อย");
+    delete dataState.settings._pendingYear;
+    delete dataState.settings._pendingTerm;
+    delete dataState.settings._pendingHideScores;
+    delete dataState.settings._pendingYearKey;
+};
+
+// ยืนยันการเปลี่ยนภาคเรียน
+// openPromote=false → เพียงบันทึกและเริ่มเปล่า
+// openPromote=true  → เปิด modal คัดลอกนักเรียนจากภาคก่อน
+window.confirmNewSemester = async function(openPromote) {
+    document.getElementById('new-semester-modal').classList.add('hidden');
+
+    const s = dataState.settings;
+    if (!s || !s._pendingYearKey) return;
+
+    s.academicYear      = s._pendingYear;
+    s.semester          = s._pendingTerm;
+    s.activeYearKey     = s._pendingYearKey;
+    s.hideStudentScores = s._pendingHideScores;
+
+    delete s._pendingYear;
+    delete s._pendingTerm;
+    delete s._pendingHideScores;
+    delete s._pendingYearKey;
+
+    await saveAndRefresh({ action: 'updateSettings', settings: s });
+
+    if (openPromote) {
+        window.openPromoteModal();
+    } else {
+        showToast(`เปลี่ยนเป็น ${formatYearKey(s.activeYearKey)} เรียบร้อย`, 'success');
+    }
+};
+
+// ==========================================
+// 📋 Promote Students — คัดลอกนักเรียนจากภาคก่อน
+// ==========================================
+window.openPromoteModal = function() {
+    const activeKey = dataState.settings && dataState.settings.activeYearKey;
+    const pastClasses = dataState.classes.filter(c => c.yearKey && c.yearKey !== activeKey);
+
+    const container = document.getElementById('promote-class-list');
+    if (!container) return;
+
+    if (pastClasses.length === 0) {
+        container.innerHTML = `<div class="text-xs text-gray-400 italic text-center py-8">ไม่พบห้องเรียนจากภาคเรียนที่ผ่านมา</div>`;
+    } else {
+        // จัดกลุ่มตาม yearKey
+        const byKey = {};
+        pastClasses.forEach(c => {
+            if (!byKey[c.yearKey]) byKey[c.yearKey] = [];
+            byKey[c.yearKey].push(c);
+        });
+        const semLabel = k => ({ '1': 'ภาคเรียนที่ 1', '2': 'ภาคเรียนที่ 2', '3': 'ภาคเรียนฤดูร้อน' }[k] || `เทอม ${k}`);
+
+        container.innerHTML = Object.entries(byKey)
+            .sort(([a], [b]) => b.localeCompare(a))
+            .map(([key, classes]) => {
+                const [year, sem] = key.split('-');
+                return `<div class="border border-gray-200 rounded-sm overflow-hidden mb-2">
+                    <div class="bg-[#F5F0E8] px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                        ${semLabel(sem)} / ปีการศึกษา ${year}
+                    </div>
+                    ${classes.map(c => {
+                        const cnt = dataState.students.filter(s => s.classId == c.id).length;
+                        const sub = dataState.subjects.find(s => s.id == c.subjectId);
+                        return `<label class="flex items-center gap-3 px-3 py-2.5 bg-white hover:bg-[#F5F0E8] cursor-pointer transition-colors border-t border-gray-100">
+                            <input type="checkbox" class="promote-class-cb accent-[#C53D43] w-4 h-4 flex-shrink-0" value="${c.id}">
+                            <div class="flex-1 min-w-0">
+                                <div class="font-bold text-sm text-[#1A1A2E]">${c.name}</div>
+                                <div class="text-[10px] text-gray-500">${sub ? sub.name : '—'} · ${cnt} นักเรียน</div>
+                            </div>
+                        </label>`;
+                    }).join('')}
+                </div>`;
+            }).join('');
+    }
+
+    document.getElementById('promote-students-modal').classList.remove('hidden');
+};
+
+window.closePromoteModal = function() {
+    document.getElementById('promote-students-modal').classList.add('hidden');
+    showToast('ข้ามการคัดลอก — เพิ่มห้องเรียนใหม่ได้ที่เมนูด้านบน', 'success');
+};
+
+window.executePromoteStudents = async function() {
+    const checked = [...document.querySelectorAll('.promote-class-cb:checked')];
+    if (checked.length === 0) return alert('กรุณาเลือกห้องเรียนที่ต้องการคัดลอกอย่างน้อย 1 ห้อง');
+
+    showLoading('กำลังคัดลอกรายชื่อนักเรียน...');
+
+    const activeKey = dataState.settings && dataState.settings.activeYearKey;
+    let totalCopied = 0;
+
+    checked.forEach(cb => {
+        const oldClass = dataState.classes.find(c => String(c.id) === String(cb.value));
+        if (!oldClass) return;
+
+        const newClassId = Date.now() + Math.floor(Math.random() * 9000) + 1000;
+        dataState.classes.push({ id: newClassId, name: oldClass.name, subjectId: oldClass.subjectId, yearKey: activeKey });
+
+        dataState.students.filter(s => String(s.classId) === String(oldClass.id)).forEach((s, idx) => {
+            dataState.students.push({
+                id: newClassId + idx + 1,
+                classId: newClassId,
+                no: s.no,
+                code: s.code,
+                name: s.name
+            });
+            totalCopied++;
+        });
+    });
+
+    document.getElementById('promote-students-modal').classList.add('hidden');
+    hideLoading();
+
+    await saveAndRefresh();
+    showToast(`คัดลอกนักเรียน ${totalCopied} คน เข้าภาคเรียนใหม่เรียบร้อย`, 'success');
+};
+
+// ==========================================
+// 🗑 ลบห้องเรียน (cascade ลบนักเรียน + งาน + เช็คชื่อ)
+// ==========================================
+window.deleteClass = async function(id, name) {
+    const cnt = dataState.students.filter(s => s.classId == id).length;
+    const msg = cnt > 0
+        ? `ต้องการลบห้อง "${name}" และนักเรียน ${cnt} คนออกจากระบบใช่หรือไม่?\n\n⚠️ คะแนนและงานที่ผูกกับนักเรียนจะยังคงอยู่ในระบบ`
+        : `ต้องการลบห้อง "${name}" ออกจากระบบใช่หรือไม่?`;
+    if (!confirm(msg)) return;
+    await saveAndRefresh({ action: 'deleteClass', id, cascade: true });
+    showToast(`ลบห้อง "${name}" เรียบร้อย`);
+};
+
+// ==========================================
+// 📖 ดูสรุปข้อมูลภาคเรียนเก่า (Archive)
+// ==========================================
+window.viewYearArchive = function(yearKey) {
+    const [year, sem] = yearKey.split('-');
+    const semNames = { '1': 'ภาคเรียนที่ 1', '2': 'ภาคเรียนที่ 2', '3': 'ภาคเรียนฤดูร้อน' };
+    const semLabel = semNames[sem] || `เทอม ${sem}`;
+
+    const titleEl = document.getElementById('archive-view-title');
+    if (titleEl) titleEl.innerHTML = `<i class="fa-solid fa-archive text-[#D4AF37] mr-2"></i>${semLabel} / ปีการศึกษา ${year}`;
+
+    const content = document.getElementById('archive-view-content');
+    if (!content) return;
+
+    const classes = dataState.classes.filter(c => c.yearKey === yearKey);
+    if (classes.length === 0) {
+        content.innerHTML = `<div class="text-xs text-gray-400 text-center py-8">ไม่พบข้อมูลห้องเรียน</div>`;
+    } else {
+        content.innerHTML = classes.map(c => {
+            const sub = dataState.subjects.find(s => s.id == c.subjectId);
+            const students = dataState.students
+                .filter(s => s.classId == c.id)
+                .sort((a, b) => Number(a.no) - Number(b.no));
+            return `<div class="border border-gray-200 rounded-sm overflow-hidden">
+                <div class="bg-[#1A1A2E] text-white px-4 py-2.5 flex items-center justify-between">
+                    <div>
+                        <div class="font-bold text-sm">${c.name}</div>
+                        <div class="text-[10px] text-gray-400">${sub ? sub.name : '—'} · ${students.length} คน</div>
+                    </div>
+                    <i class="fa-solid fa-users text-[#D4AF37]"></i>
+                </div>
+                <div class="divide-y divide-gray-100">
+                    ${students.length === 0
+                        ? `<div class="text-xs text-gray-400 italic text-center py-3">ไม่มีนักเรียน</div>`
+                        : students.map(s => `<div class="flex items-center gap-3 px-4 py-2 text-xs bg-white hover:bg-[#F5F0E8] transition-colors">
+                            <span class="w-6 text-center text-gray-400 font-bold">${s.no || '-'}</span>
+                            <span class="text-gray-400 font-mono w-20">${s.code || '-'}</span>
+                            <span class="font-bold text-[#1A1A2E] flex-1">${s.name}</span>
+                        </div>`).join('')}
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    document.getElementById('archive-view-modal').classList.remove('hidden');
 };
 
 // ==========================================

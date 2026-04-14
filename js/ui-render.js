@@ -1228,6 +1228,16 @@ export function refreshUI() {
         if (yearEl && dataState.settings.academicYear) yearEl.value = dataState.settings.academicYear;
         if (termEl && dataState.settings.semester) termEl.value = dataState.settings.semester;
         if (hideEl) hideEl.checked = !!dataState.settings.hideStudentScores;
+
+        // อัพเดท badge แสดงภาคเรียน active
+        const badge = document.getElementById('active-year-badge');
+        const badgeText = document.getElementById('active-year-badge-text');
+        if (badge && dataState.settings.activeYearKey) {
+            const [y, s] = dataState.settings.activeYearKey.split('-');
+            const sl = { '1': 'ภาคเรียนที่ 1', '2': 'ภาคเรียนที่ 2', '3': 'ภาคเรียนฤดูร้อน' }[s] || `เทอม ${s}`;
+            if (badgeText) badgeText.textContent = `${sl} / ปี ${y}`;
+            badge.classList.remove('hidden');
+        }
     }
 
     // อัปเดต dropdown กรองห้องเรียนในหน้าจัดการนักเรียน
