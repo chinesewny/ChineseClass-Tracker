@@ -1,5 +1,5 @@
 import { dataState, globalState, saveStudentSession, clearStudentSession } from "./state.js";
-import { calculateScores, calGrade, formatThaiDate, getThaiDateISO, showToast, showLoading, hideLoading } from "./utils.js";
+import { calculateScores, calGrade, formatThaiDate, getThaiDateISO, showToast, showLoading, hideLoading, esc } from "./utils.js";
 window.formatThaiDate = formatThaiDate;
 window.renderStudentDashboard = renderStudentDashboard;
 // --- 1. Helper Functions (Dropdowns & Checkboxes) ---
@@ -199,7 +199,7 @@ export function renderAdminMaterials() {
             const isEmbed = m.type === 'embed';
             const icon = isEmbed ? 'fa-desktop' : 'fa-external-link-alt';
             const badge = isEmbed ? '<span class="bg-[#1A1A2E] text-white text-[10px] font-bold px-2 py-0.5 rounded-sm shadow-sm">EMBED</span>' : '<span class="bg-[#2D6A4F] text-white text-[10px] font-bold px-2 py-0.5 rounded-sm shadow-sm">LINK</span>';
-            const clickAction = isEmbed ? `window.openMaterialViewer('${m.link}', '${m.title}')` : `window.open('${m.link}', '_blank')`;
+            const clickAction = isEmbed ? `window.openMaterialViewer('${esc(m.link)}', '${esc(m.title)}')` : `window.open('${esc(m.link)}', '_blank')`;
 
             html += `
             <div class="group relative bg-white border border-gray-200 rounded-sm overflow-hidden hover:border-[#C53D43] hover:shadow-md transition-all flex flex-col h-[220px]">
@@ -1066,8 +1066,8 @@ export function renderStudentDashboard(studentCode) {
                     ? '<span class="bg-[#1A1A2E] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-sm">EMBED</span>'
                     : '<span class="bg-[#2D6A4F] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-sm">LINK</span>';
                 const clickAction = isEmbed
-                    ? `window.openMaterialViewer('${m.link}', '${m.title}')`
-                    : `window.open('${m.link}', '_blank')`;
+                    ? `window.openMaterialViewer('${esc(m.link)}', '${esc(m.title)}')`
+                    : `window.open('${esc(m.link)}', '_blank')`;
                 const imgHtml = m.image
                     ? `<img src="${m.image}" class="w-10 h-10 object-cover rounded-sm border border-gray-200 flex-shrink-0" onerror="this.style.display='none'">`
                     : `<div class="w-10 h-10 bg-[#F5F0E8] border border-gray-200 rounded-sm flex items-center justify-center flex-shrink-0 text-[#1A1A2E] opacity-40"><i class="fa-solid fa-book-open"></i></div>`;
@@ -1326,7 +1326,7 @@ window.renderStudentList = function(classId) {
                         <td class="px-3 py-2 text-center">
                             <div class="flex justify-center gap-2">
                                 <button onclick="window.openEditStudentModal('${s.id}')" class="text-[#1A1A2E] hover:text-[#D4AF37] transition-colors" title="แก้ไข"><i class="fa-solid fa-pen text-xs"></i></button>
-                                <button onclick="window.deleteStudent('${s.id}', '${s.name}')" class="text-gray-400 hover:text-[#C53D43] transition-colors" title="ลบ"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                                <button onclick="window.deleteStudent('${esc(s.id)}', '${esc(s.name)}')" class="text-gray-400 hover:text-[#C53D43] transition-colors" title="ลบ"><i class="fa-solid fa-trash-can text-xs"></i></button>
                             </div>
                         </td>
                     </tr>`).join('')}

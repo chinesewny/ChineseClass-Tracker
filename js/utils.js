@@ -1,5 +1,15 @@
 import { dataState } from "./state.js";
 
+// Escape a string for safe use inside an HTML onclick="..." attribute (single-quote context)
+export function esc(str) {
+    return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/'/g, '&#39;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
 export function getThaiDateISO() {
     // ดึงเวลาปัจจุบันตามโซนไทย (Asia/Bangkok)
     const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok" }));
