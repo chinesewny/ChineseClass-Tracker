@@ -17,7 +17,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 30000) {
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { FIREBASE_CONFIG, GOOGLE_SCRIPT_URL } from "./config.js";
-import { dataState, updateDataState, saveToLocalStorage, globalState, updateLocalState } from "./state.js";
+import { dataState, updateDataState, saveToLocalStorage, globalState, updateLocalState, saveSettingsPersistent } from "./state.js";
 import { updateSyncUI, showToast, showLoading, hideLoading } from "./utils.js";
 import { refreshUI } from "./ui-render.js?v=4";
 
@@ -86,6 +86,7 @@ function triggerUIRefresh() {
     clearTimeout(syncTimeout);
     syncTimeout = setTimeout(() => {
         saveToLocalStorage();
+        saveSettingsPersistent(); // บันทึก settings แยกต่างหาก (ไม่มีหมดอายุ)
         refreshUI();
         updateSyncUI('Online (Firestore)', 'green');
     }, 300);

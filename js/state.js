@@ -38,7 +38,7 @@ export function updateLocalState(p) {
     if(p.action === 'submitTask') { p.studentIds.forEach(sid => { dataState.submissions = dataState.submissions.filter(s => !(s.studentId == sid && s.taskId == p.taskId)); if(dataState.returns) dataState.returns = dataState.returns.filter(r => !(r.studentId == sid && r.taskId == p.taskId)); dataState.submissions.push({taskId:p.taskId, studentId:sid, link:p.link, timestampISO: new Date().toISOString(), comment: p.comment}); }); }
     // ใน js/state.js ฟังก์ชัน updateLocalState
 
-    if(p.action === 'updateSettings') { if(!dataState.settings) dataState.settings = {}; Object.assign(dataState.settings, p.settings); }
+    if(p.action === 'updateSettings') { if(!dataState.settings) dataState.settings = {}; Object.assign(dataState.settings, p.settings); saveSettingsPersistent(); }
     if(p.action === 'deleteStudent') { dataState.students = dataState.students.filter(s => s.id !== p.id); }
     if(p.action === 'updateStudent') { const s = dataState.students.find(x => x.id == p.id); if(s) { s.no = p.no; s.code = p.code; s.name = p.name; } }
     if(p.action === 'editTaskDetails') {
@@ -118,11 +118,39 @@ export function getActiveStudentSession() {
         const hoursPassed = (now - session.timestamp) / (1000 * 60 * 60);
         
         if (hoursPassed > 3) {
-            clearStudentSession(); 
+            clearStudentSession();
             return null;
         }
         return session;
     } catch (e) {
         return null;
     }
+}
+
+// ==========================================
+// 💾 Persistent Settings (ไม่มีวันหมดอายุ)
+// บันทึก settings แยกจาก backup ปกติ เพื่อให้โหลดได้ทันทีตอนเปิดหน้าเว็บ
+// ก่อนที่ Firebase จะ sync เสร็จ
+// ==========================================
+export function saveSettingsPersistent() {
+    if (dataState.settings && typeof dataState.settings === 'object' && !Array.isArray(dataState.settings)) {
+        try {
+            localStorage.setItem('wany_settings_persistent', JSON.stringify(dataState.settings));
+        } catch(e) {}
+    }
+}
+
+export function loadSettingsPersistent() {
+    try {
+        const raw = localStorage.getItem('wany_settings_persistent');
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            if (!dataState.settings || typeof dataState.settings !== 'object') dataState.settings = {};
+            // merge เข้า dataState.settings โดยไม่ทับค่าที่ Firebase อาจโหลดมาแล้ว
+            Object.keys(parsed).forEach(k => {
+                if (dataState.settings[k] === undefined) dataState.settings[k] = parsed[k];
+            });
+        }
+    } catch(e) {}
 }

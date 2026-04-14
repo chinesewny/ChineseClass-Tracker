@@ -1,5 +1,5 @@
 import { syncData, saveAndRefresh, backupToGoogleSheet, restoreFromGoogleSheet } from './firebase-service.js';
-import { dataState, globalState, loadFromLocalStorage, updateLocalState, saveToLocalStorage } from "./state.js";
+import { dataState, globalState, loadFromLocalStorage, updateLocalState, saveToLocalStorage, loadSettingsPersistent, saveSettingsPersistent } from "./state.js";
 import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import { GOOGLE_SCRIPT_URL } from "./config.js"; // <--- วางตรงนี้ถ้ายังไม่มี
 import { 
@@ -1196,8 +1196,9 @@ function startAutoSyncScheduler() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
-    syncData(); 
-    loadFromLocalStorage(); 
+    loadSettingsPersistent(); // โหลด settings ทันทีก่อน Firebase sync (ไม่มีหมดอายุ)
+    syncData();
+    loadFromLocalStorage();
     refreshUI();
     
     if(document.getElementById('att-date-input')) document.getElementById('att-date-input').value = getThaiDateISO();
